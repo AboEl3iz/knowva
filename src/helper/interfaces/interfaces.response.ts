@@ -79,7 +79,7 @@ interface IGroup {
   teacherId: string;
   subjectId: string;
   capacity: string;
-  studentIds: string[];
+  studentIds: FlutterUser[];
   status: "complete" | "active" | "inactive"; // restrict to enum-like values
   createdAt: Date;
 }

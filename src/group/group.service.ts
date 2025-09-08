@@ -51,7 +51,7 @@ export class GroupService {
     data: { status: newStatus },
     include: {
       memberships: {
-        select: { student: { select: { id: true } } },
+        select: { student: { select: { id: true , name: true, email: true } } },
         where: { status: 'APPROVED' },
       },
     },
@@ -76,7 +76,13 @@ export class GroupService {
     teacherId: updatedGroup.createdById.toString(),
     subjectId: updatedGroup.subjectId.toString(),
     capacity: updatedGroup.capacity.toString(),
-    studentIds: updatedGroup.memberships.map(m => m.student.id.toString()),
+    studentIds: updatedGroup.memberships.map(m => {
+      return {
+        id: m.student.id.toString(),
+        name: m.student.name,
+        email: m.student.email
+      }
+    }),
     status,
     createdAt: updatedGroup.createdAt,
   };
@@ -140,7 +146,13 @@ export class GroupService {
         teacherId: group.createdById.toString(),
         subjectId: group.subject.id.toString(),
         capacity: group.capacity.toString(),
-        studentIds: group.memberships.map((m) => m.student.id.toString()),
+        studentIds: group.memberships.map((m) => {
+          return {
+            id: m.student.id.toString(),
+            name: m.student.name,
+            email: m.student.email,
+          };
+        }),
         status,
         createdAt: group.createdAt,
       };
@@ -185,7 +197,13 @@ export class GroupService {
         teacherId: group.createdById.toString(),
         subjectId: group.subject.id.toString(),
         capacity: group.capacity.toString(),
-        studentIds: group.memberships.map((m) => m.student.id.toString()),
+        studentIds: group.memberships.map((m) => {
+          return {
+            id: m.student.id.toString(),
+            name: m.student.name,
+            email: m.student.email,
+          };
+        }),
         status,
         createdAt: group.createdAt,
       };
@@ -236,7 +254,13 @@ export class GroupService {
       teacherId: group.subject.teacher.id.toString(),
       subjectId: group.subject.id.toString(),
       capacity: group.capacity.toString(),
-      studentIds: group.memberships.map((m) => m.student.id.toString()),
+      studentIds: group.memberships.map((m) => {
+        return {
+          id: m.student.id.toString(),
+          name: m.student.name,
+          email: m.student.email,
+        };
+      }),
       status,
       createdAt: group.createdAt,
     };

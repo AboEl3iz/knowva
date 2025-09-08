@@ -222,6 +222,28 @@ export class AuthService {
     };
   }
 
+  async getstudentProfile(id: number): Promise<IUser> {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: id
+      }
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      phone: user.phone ?? '',
+      avatar: user.avatar ?? '',
+      bio: user.bio ?? '',
+      createdAt: user.createdAt,
+      gender: user.gender ?? '',
+    };
+  }
+
   /**
    * 
    * @param id 

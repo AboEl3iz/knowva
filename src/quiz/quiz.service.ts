@@ -201,7 +201,7 @@ export class QuizService {
         return this.prisma.question.update({ where: { id: questionId, createdById: userId }, data: questionDto });
     }
 
-    async removeQuestionFromQuiz(userId: number, questionId: number ,quizId: number) {
+    async removeQuestionFromQuiz(userId: number, questionId: number, quizId: number) {
         const quiz = await this.prisma.quiz.findUnique({ where: { id: quizId, createdById: userId } });
         if (!quiz) throw new BadRequestException('Quiz not found');
         const question = await this.prisma.question.findUnique({ where: { id: questionId, createdById: userId } });
@@ -246,8 +246,42 @@ export class QuizService {
     }
 
     async addQuestionAnswer(quizAttemptId: number, questionId: number, answer: string) {
-        return this.prisma.studentAnswer.create({ data: { quizAttemptId, questionId, answer } });
+        const attempt = await this.prisma.quizAttempt.findUnique({
+            where: { id: quizAttemptId },
+            include: { quiz: true },
+        });
+        if (!attempt) throw new BadRequestException('Attempt not found');
+
+        const question = await this.prisma.question.findUnique({ where: { id: questionId } });
+        if (!question) throw new BadRequestException('Question not found');
+
+        // check if student already answered
+        let studentAnswer = await this.prisma.studentAnswer.findUnique({
+            where: {
+                quizAttemptId_questionId: { quizAttemptId, questionId },
+            },
+        });
+
+        if (studentAnswer) {
+            // If answer exists
+            if (attempt.quiz.canChangeAnswer) {
+                studentAnswer = await this.prisma.studentAnswer.update({
+                    where: { id: studentAnswer.id },
+                    data: { answer },
+                });
+            } else {
+                throw new BadRequestException('Answer cannot be changed');
+            }
+        } else {
+            // If no answer yet → create new one
+            studentAnswer = await this.prisma.studentAnswer.create({
+                data: { quizAttemptId, questionId, answer },
+            });
+        }
+
+        return studentAnswer;
     }
+
 
     async updateQuestionAnswer(quizAttemptId: number, questionId: number, answer: string) {
         return this.prisma.studentAnswer.update({
