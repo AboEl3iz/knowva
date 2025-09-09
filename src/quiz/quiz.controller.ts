@@ -11,7 +11,8 @@ import {
     ParseIntPipe,
     HttpCode,
     HttpStatus,
-    Query
+    Query,
+    Req
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiBody } from '@nestjs/swagger';
 import { QuizService } from './quiz.service';
@@ -153,7 +154,7 @@ export class QuizController {
 
     @Get('list/public')
     @Roles(Role.TEACHER)
-   @ApiOperation({ summary: 'Get public quizzes' })
+    @ApiOperation({ summary: 'Get public quizzes' })
 
     /**
      * Retrieves all public quizzes for the authenticated teacher
@@ -230,7 +231,7 @@ export class QuizController {
      * @param questionId The ID of the question to add
      * @returns The created question
      */
-    
+
     async addOldQuestionToQuiz(
         @Param('quizId', ParseIntPipe) quizId: number,
         @Param('questionId', ParseIntPipe) questionId: number,
@@ -323,8 +324,8 @@ export class QuizController {
      * @param id The ID of the question to remove from its quiz
      * @returns The removed question
      */
-    async removeQuestionFromQuiz(@Param('id', ParseIntPipe) id: number, @Request() req ,@Query('quizId') quizId: number) {
-        return this.quizService.removeQuestionFromQuiz(req.user.id, id ,quizId);
+    async removeQuestionFromQuiz(@Param('id', ParseIntPipe) id: number, @Request() req, @Query('quizId') quizId: number) {
+        return this.quizService.removeQuestionFromQuiz(req.user.id, id, quizId);
     }
 
     @Delete('questions/:id')
@@ -492,4 +493,15 @@ export class QuizController {
     ) {
         return this.quizService.saveAiQuestions(req.user.id, quizId, body.questions);
     }
+
+
+    @Post(':quizId/ai-generate')
+    @Roles(Role.TEACHER)
+    async generateAiQuestions(
+        @Param('quizId', ParseIntPipe) quizId: number,
+        @Req() req: any,
+    ) {
+        return this.quizService.generateAiQuestions(quizId, +req.user.id);
+    }
+
 }

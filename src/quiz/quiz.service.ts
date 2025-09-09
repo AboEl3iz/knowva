@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, BadRequestException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import { CreateQuizDto } from './dto/create-quiz.dto';
 import { UpdateQuizDto } from './dto/update-quiz.dto';
@@ -9,11 +9,14 @@ import { validate } from 'class-validator';
 import { NotificationService } from 'src/notification/notification.service';
 import { NotificationGateway } from 'src/notification/notification.gateway';
 import e from 'express';
-
+import axios from 'axios';
+import { plainToInstance } from 'class-transformer';
+import { Question } from 'generated/prisma';
 @Injectable()
 export class QuizService {
     constructor(private prisma: PrismaService, private notifications: NotificationService,
-        private readonly notificationGateway: NotificationGateway
+        private readonly notificationGateway: NotificationGateway,
+        // private readonly http: HttpService,
     ) { }
 
     async getQuizes(userId: number) {
@@ -42,22 +45,19 @@ export class QuizService {
             include: { questions: { include: { question: true } } } as any
         });
         if (!quiz) throw new BadRequestException('Quiz not found');
-        return quiz.map(
-            (q) => {
-                let currentStatus: "UPCOMING" | "ONGOING" | "ENDED";
-                if (new Date(q.startsAt) > new Date()) {
-                    currentStatus = "UPCOMING";
-                } else if (new Date(q.endsAt) > new Date()) {
-                    currentStatus = "ONGOING";
-                } else {
-                    currentStatus = "ENDED";
-                }
-                return {
-                    ...q,
-                    currentStatus
-                }
-            }
-        );
+        let currentStatus: "UPCOMING" | "ONGOING" | "ENDED";
+        if (new Date(quiz.startsAt) > new Date()) {
+            currentStatus = "UPCOMING";
+        } else if (new Date(quiz.endsAt) > new Date()) {
+            currentStatus = "ONGOING";
+        } else {
+            currentStatus = "ENDED";
+        }
+        return {
+            ...quiz,
+            currentStatus
+        }
+
     }
 
     async createQuiz(userId: number, createQuizDto: CreateQuizDto) {
@@ -123,7 +123,7 @@ export class QuizService {
     }
 
     async getPublicQuizzes(userId: number) {
-        let   quizzes = await this.prisma.quiz.findMany({ where: { createdById: userId, status: 'PUBLIC' as any } });
+        let quizzes = await this.prisma.quiz.findMany({ where: { createdById: userId, status: 'PUBLIC' as any } });
         return quizzes.map(
             (q) => {
                 let currentStatus: "UPCOMING" | "ONGOING" | "ENDED";
@@ -242,6 +242,98 @@ export class QuizService {
         }
         return { count: questions.length };
     }
+
+    async generateAiQuestions(quizId: number, teacherId: number) {
+        // request body for AI
+        const requestBody = {
+            language: 'en',
+            level: 'hard',
+            pdf_path: 'data/The Machine Learning Pipeline.pdf',
+            n_questions: 10,
+            f_mcq_ratio: 0.6,
+            f_tf_ratio: 0.2,
+            f_written_ratio: 0.2,
+            r_mcq_ratio: 0.6,
+            r_tf_ratio: 0.2,
+            r_written_ratio: 0.2,
+        };
+
+        // 1. Call AI
+        const { data } = await axios.post(
+            'https://8000-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/generate_quiz/',
+            requestBody,
+        );
+
+        if (!Array.isArray(data)) {
+            throw new BadRequestException('AI did not return a valid list of questions');
+        }
+
+        type QuestionDTO = {
+            id: number;
+            text: string;
+            type: string;
+            options: string[];
+            answer: string;
+            quizId: number;
+        };
+
+        let savedQuestions: QuestionDTO[] = [];
+
+        // 2. Validate & Save
+        for (const q of data) {
+            if (!q.question || typeof q.question !== 'string') continue;
+            if (!q.type || !['MCQ', 'TrueFalse', 'Written'].includes(q.type)) continue;
+            if (!q.answer || typeof q.answer !== 'string') continue;
+
+            // if (q.type === 'MCQ') {
+            //     if (!Array.isArray(q.options) || q.options.length < 2) continue;
+            //     if (!q.options.includes(q.answer)) continue;
+            // }
+
+            // if (q.type === 'TrueFalse') {
+            //     if (!['True', 'False'].includes(q.answer)) continue;
+            // }
+
+            // set default score if not present
+            const score = typeof q.score === 'number' && q.score > 0 ? q.score : 1;
+
+            // 3. Save question
+            const savedQuestion = await this.prisma.question.create({
+                data: {
+                    question: q.question,
+                    type: q.type as QuestionType,
+                    options: q.options ?? [],
+                    answer: q.answer,
+                    score,
+                    mode: QuestionMode.AI,
+                    createdById: teacherId,
+                },
+            });
+
+            // 4. Link with quiz
+            await this.prisma.quizQuestion.create({
+                data: {
+                    quizId,
+                    questionId: savedQuestion.id,
+                },
+            });
+
+            savedQuestions.push({
+                id: savedQuestion.id,
+                text: savedQuestion.question,
+                type: savedQuestion.type,
+                options: savedQuestion.options,
+                answer: savedQuestion.answer,
+                quizId,
+            });
+        }
+
+        return {
+            message: `Saved ${savedQuestions.length} valid questions`,
+            questions: savedQuestions,
+        };
+    }
+
 
     async duplicateQuestion(userId: number, questionId: number) {
         const question = await this.prisma.question.findUnique({
