@@ -146,6 +146,7 @@ model Lesson {
   id        Int      @id @default(autoincrement())
   type      String
   title     String
+  description String
   url       String
   publicId  String
   createdAt DateTime @default(now())

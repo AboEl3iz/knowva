@@ -283,8 +283,23 @@ export class GroupService {
   }
 
   async remove(id: number, userId: number) {
-    let group = await this.prisma.group.findUnique({ where:  { id: id, createdById: userId , } });
+    let group = await this.prisma.group.findUnique({ where:  { id: id, createdById: userId , memberships : {
+      some: {
+        status: 'APPROVED'
+      },
+
+    } },
+    include: {
+      memberships: {
+        select: {
+          student: { select: { id: true, name: true, email: true } },
+        },
+        where: { status: 'APPROVED' },
+      },
+    }
+   });
     if (!group) throw new BadRequestException("Group not found");
+    if(group.memberships.length > 0) throw new BadRequestException("Group has enrolled students");
     
     await this.prisma.group.delete({ where: { id: id } });
     return { message: "Group deleted successfully" };

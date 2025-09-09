@@ -68,10 +68,12 @@ export class LessonService {
     let lesson = await this.prisma.lesson.create({
       data: {
         title: CreateLessonDto.title,
+        description : CreateLessonDto.description,
         url:  file.mimetype === 'application/pdf' ? downloadUrl : secure_url,
         type: type,
         subjectId: subjectId,
-        publicId: public_id
+        publicId: public_id,
+
       }
     });
 
@@ -174,11 +176,11 @@ export class LessonService {
     }
     return {
       id: lesson.id.toString(),
-      name: lesson.subject.title,
+      name: lesson.title,
       fileUrl: lesson.url,
       type: lesson.type,
       subjectId: lesson.subjectId.toString(),
-      description: lesson.title,
+      description: lesson.description,
       createdAt: lesson.createdAt,
       createdBy: {
         id: lesson.subject.teacher.id.toString(),
@@ -225,11 +227,11 @@ export class LessonService {
     }
     return lessons.map((lesson) => ({
       id: lesson.id.toString(),
-      name: lesson.subject.title,
+      name: lesson.title,
       fileUrl: lesson.url,
       type: lesson.type,
       subjectId: lesson.subjectId.toString(),
-      description: lesson.title,
+      description: lesson.description,
       createdAt: lesson.createdAt,
       createdBy: {
         id: lesson.subject.teacher.id.toString(),
@@ -316,6 +318,7 @@ export class LessonService {
 
     let lesson = await this.prisma.lesson.create({
       data: {
+        description: CreateLessonDto.description,
         title: CreateLessonDto.title,
         url: result.secure_url,
         type: type,
@@ -378,11 +381,11 @@ export class LessonService {
     });
     return lessons.map((lesson) => ({
       id: lesson.id.toString(),
-      name: lesson.subject.title,
+      name: lesson.title,
       fileUrl: lesson.url,
       type: lesson.type,
       subjectId: lesson.subjectId.toString(),
-      description: lesson.title,
+      description: lesson.description,
       createdAt: lesson.createdAt,
       createdBy: {
         id: lesson.subject.teacher.id.toString(),
