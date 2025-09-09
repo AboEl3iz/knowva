@@ -48,7 +48,7 @@ export class LessonService {
       throw new BadRequestException("One or more groups not found");
     }
 
-    const result: UploadApiResponse = await this.cloudinaryService.uploadFile(file).catch((err) => {
+    const result : UploadApiResponse = await this.cloudinaryService.uploadFile(file).catch((err) => {
       console.log(err);
       throw new BadRequestException('Error uploading file');
     });
@@ -68,7 +68,7 @@ export class LessonService {
     let lesson = await this.prisma.lesson.create({
       data: {
         title: CreateLessonDto.title,
-        url: result.secure_url,
+        url:  result.secure_url,
         type: type,
         subjectId: subjectId,
         publicId: result.public_id
