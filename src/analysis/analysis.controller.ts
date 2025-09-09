@@ -1,6 +1,10 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { AnalysisService } from './analysis.service';
 import { ParseIntPipe } from '@nestjs/common';
+import { Roles } from 'src/decorator/decorator/roles.decorator';
+import { Role } from 'src/decorator/enums/roles';
+import { AuthenticationGuard } from 'src/guards/authentication.guard';
+import { AuthorizationGuard } from 'src/guards/authorization.guard';
 
 @Controller('analysis')
 export class AnalysisController {
@@ -41,5 +45,13 @@ export class AnalysisController {
   getExamAnalysis(@Param('id', ParseIntPipe) id: number, @Query('passing') passing?: string) {
     const passingThreshold = passing ? parseFloat(passing) : 50;
     return this.analysisService.getExamAnalysis(id, passingThreshold);
+  }
+
+  @Get('stats')
+  @Roles(Role.TEACHER)
+  @UseGuards(AuthenticationGuard, AuthorizationGuard)
+  async getStats(@Req() req) {
+    const teacherId = req.user.id; // جاي من الـ JWT
+    return this.analysisService.getStats(+teacherId);
   }
 }

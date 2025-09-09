@@ -67,6 +67,7 @@ export class LessonService {
 
     let lesson = await this.prisma.lesson.create({
       data: {
+        createdById : userId,
         title: CreateLessonDto.title,
         description : CreateLessonDto.description,
         url:  file.mimetype === 'application/pdf' ? downloadUrl : secure_url,

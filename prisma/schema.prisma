@@ -57,6 +57,8 @@ model User {
   createdQuizzes Quiz[]
 
   createdQuestions Question[]
+
+  Lesson Lesson[]
 }
 
 enum Gender {
@@ -148,6 +150,8 @@ model Lesson {
   title     String
   description String
   url       String
+  createdBy User @relation(fields: [createdById], references: [id])
+  createdById Int
   publicId  String
   createdAt DateTime @default(now())
   subject   Subject  @relation(fields: [subjectId], references: [id])
@@ -198,6 +202,7 @@ model Quiz {
   id              Int      @id @default(autoincrement())
   title           String
   status          QuizStatus @default(DRAFT)
+  //todo ongoing or ended
   subject         Subject  @relation(fields: [subjectId], references: [id])
   subjectId       Int
   group           Group    @relation(fields: [groupId], references: [id])

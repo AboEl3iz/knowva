@@ -202,5 +202,36 @@ export class AnalysisService {
       successClassWidePercent: successClassWide
     };
   }
+  // ===================== home Analysis =====================
 
+   async getStats(teacherId: number) {
+    // عدد الطلاب (distinct students اللي في Membership)
+    const studentsCount = await this.prisma.membership.count({
+      where: { group: { createdById: teacherId } },
+    });
+
+    // عدد الدروس
+    const lessonsCount = await this.prisma.lesson.count({
+      where: { 
+        subject: { teacherId: teacherId },
+      },
+    });
+
+    // عدد الجروبات
+    const groupsCount = await this.prisma.group.count({
+      where: { createdById: teacherId },
+    });
+
+    // عدد الكويزات
+    const quizzesCount = await this.prisma.quiz.count({
+      where: { createdById: teacherId },
+    });
+
+    return {
+      students: studentsCount,
+      materials: lessonsCount,
+      classes: groupsCount,
+      exams: quizzesCount,
+    };
+  }
 }
