@@ -4,41 +4,54 @@ import { Injectable, Logger } from '@nestjs/common';
 
 @Injectable()
 export class CloudinaryService {
+  /**
+   * Upload a file to Cloudinary (raw) with a unique public_id
+   * @param file Express.Multer.File
+   * @param folder optional folder name
+   */
   async uploadFile(file: Express.Multer.File, folder?: string): Promise<any> {
     return new Promise((resolve, reject) => {
+      // Generate a unique public_id based on original filename + timestamp
+      const originalName = file.originalname.split('.').slice(0, -1).join('.');
+      const extension = file.originalname.split('.').pop();
+      const timestamp = Date.now();
+      const publicId = `${folder || 'lessons'}/${originalName}_${timestamp}`;
+
       const uploadStream = cloudinary.uploader.upload_stream(
         {
-          folder: folder || 'lessons',
-          resource_type: 'raw',      // Required for PDFs, ZIPs, DOCs, etc.
-          use_filename: true,
-          unique_filename: false,
+          resource_type: 'raw',
+          public_id: publicId,
         },
         (error, result) => {
           if (error) return reject(error);
 
-          // Correct download URL for raw files
-          const downloadUrl = `https://res.cloudinary.com/${cloudinary.config().cloud_name}/raw/upload/${result!.public_id}?attachment=${encodeURIComponent(file.originalname)}`;
+          // Construct download URL with proper filename & extension
+          const downloadUrl = `https://res.cloudinary.com/${cloudinary.config().cloud_name}/raw/upload/${publicId}?attachment=${encodeURIComponent(file.originalname)}`;
 
           Logger.log(
             `File uploaded to Cloudinary.
-             Secure URL: ${result!.secure_url},
-             Download URL: ${downloadUrl},
-             Public ID: ${result!.public_id}`
+Secure URL: ${result!.secure_url}
+Download URL: ${downloadUrl}
+Public ID: ${publicId}`
           );
 
           resolve({
-            public_id: result!.public_id,
+            public_id: publicId,
             secure_url: result!.secure_url, // direct access / preview
-            downloadUrl,                    // download with proper filename
+            downloadUrl,                    // download with original filename
           });
         }
       );
 
-      // Convert buffer to stream and pipe to Cloudinary
+      // Pipe the file buffer to Cloudinary
       Readable.from(file.buffer).pipe(uploadStream);
     });
   }
 
+  /**
+   * Delete a file from Cloudinary
+   * @param publicId string
+   */
   async deleteFile(publicId: string): Promise<any> {
     return cloudinary.uploader.destroy(publicId, { resource_type: 'raw' });
   }
