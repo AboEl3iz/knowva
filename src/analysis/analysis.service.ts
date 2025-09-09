@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 
 @Injectable()
@@ -45,16 +45,44 @@ export class AnalysisService {
     const attendancePercent =
       totalQuizzes > 0 ? Math.round((attendedQuizzes / totalQuizzes) * 100) : 0;
 
+    Logger.error(`attendancePercent: ${attendancePercent} | totalQuizzes: ${totalQuizzes} | attendedQuizzes: ${attendedQuizzes}`);
+
     const results = await Promise.all(
       attempts
         .filter(r => r.quiz.status === ('PUBLIC' as any))
         .map(async r => {
           const passScore = await this.calculatePassingScore(r.quizId, thresholdPercent);
+          let subject = await this.prisma.subject.findUnique({ where: { id: r.quiz.subjectId }, select: { title: true } });
+          if (!subject) return null;
+
+          let totalQuestions = await this.prisma.quizQuestion.count({ where: { quizId: r.quizId } });
+          let totalmarkforquiz = await this.prisma.quizQuestion.findMany({
+            where: { quizId: r.quizId }, select: {
+              question: {
+                select: {
+                  score: true
+                }
+              }
+            }
+          });
+          // ✅ الحل الصحيح: تجمع يدوي
+          const questions = await this.prisma.quizQuestion.findMany({
+            where: { quizId: r.quizId },
+            select: { question: { select: { score: true } } },
+          });
+          const fullMark = questions.reduce((acc, q) => acc + (q.question.score ?? 0), 0);
+
+          Logger.log(
+            `fullMark: ${fullMark} | totalQuestions: ${totalQuestions} | studentScore: ${r.score ?? 0}`,
+          );
           return {
             examId: r.quizId,
             examName: r.quiz.title,
+            subjectname: subject.title,
             date: r.quiz.startsAt,
             score: r.score ?? 0,
+            fullMark,
+            totalQuestions,
             pass: (r.score ?? 0) >= passScore,
           };
         }),
@@ -204,7 +232,7 @@ export class AnalysisService {
   }
   // ===================== home Analysis =====================
 
-   async getStats(teacherId: number) {
+  async getStats(teacherId: number) {
     // عدد الطلاب (distinct students اللي في Membership)
     const studentsCount = await this.prisma.membership.count({
       where: { group: { createdById: teacherId } },
@@ -212,7 +240,7 @@ export class AnalysisService {
 
     // عدد الدروس
     const lessonsCount = await this.prisma.lesson.count({
-      where: { 
+      where: {
         subject: { teacherId: teacherId },
       },
     });
