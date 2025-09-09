@@ -12,6 +12,7 @@ import e from 'express';
 import axios from 'axios';
 import { plainToInstance } from 'class-transformer';
 import { Question } from 'generated/prisma';
+import { GenerateQuizDto } from './dto/create-question-ai.dto';
 @Injectable()
 export class QuizService {
     constructor(private prisma: PrismaService, private notifications: NotificationService,
@@ -243,19 +244,20 @@ export class QuizService {
         return { count: questions.length };
     }
 
-    async generateAiQuestions(quizId: number, teacherId: number) {
+    async generateAiQuestions(quizId: number, teacherId: number , generateQuizByAi: GenerateQuizDto) {
         // request body for AI
         const requestBody = {
-            language: 'en',
-            level: 'hard',
-            pdf_path: 'data/The Machine Learning Pipeline.pdf',
-            n_questions: 10,
-            f_mcq_ratio: 0.6,
-            f_tf_ratio: 0.2,
-            f_written_ratio: 0.2,
-            r_mcq_ratio: 0.6,
-            r_tf_ratio: 0.2,
-            r_written_ratio: 0.2,
+            // language: 'en',
+            // level: 'hard',
+            // pdf_path: 'data/The Machine Learning Pipeline.pdf',
+            // n_questions: 10,
+            // f_mcq_ratio: 0.6,
+            // f_tf_ratio: 0.2,
+            // f_written_ratio: 0.2,
+            // r_mcq_ratio: 0.6,
+            // r_tf_ratio: 0.2,
+            // r_written_ratio: 0.2,
+            ...generateQuizByAi
         };
 
         // 1. Call AI

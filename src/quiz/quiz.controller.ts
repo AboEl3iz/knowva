@@ -24,6 +24,7 @@ import { AuthenticationGuard } from '../guards/authentication.guard';
 import { AuthorizationGuard } from '../guards/authorization.guard';
 import { Roles } from '../decorator/decorator/roles.decorator';
 import { Role } from '../decorator/enums/roles';
+import { GenerateQuizDto } from './dto/create-question-ai.dto';
 
 @ApiTags('Quiz')
 @Controller('quiz')
@@ -499,9 +500,10 @@ export class QuizController {
     @Roles(Role.TEACHER)
     async generateAiQuestions(
         @Param('quizId', ParseIntPipe) quizId: number,
+        @Body() generateQuizByAi: GenerateQuizDto,
         @Req() req: any,
     ) {
-        return this.quizService.generateAiQuestions(quizId, +req.user.id);
+        return this.quizService.generateAiQuestions(quizId, +req.user.id , generateQuizByAi);
     }
 
 }
