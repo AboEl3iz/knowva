@@ -3,78 +3,165 @@ import { PrismaService } from 'src/database/prisma.service';
 
 @Injectable()
 export class AnalysisService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
-  // Student Analysis
-  async getStudentAnalysis(studentId: number) {
-    const attempts = await this.prisma.quizAttempt.findMany({
-      where: { studentId },
-      include: { quiz: true }
+  /**
+   * Helper: Calculate passing score for a quiz
+   */
+  private async calculatePassingScore(quizId: number, thresholdPercent = 50): Promise<number> {
+    const questions = await this.prisma.quizQuestion.findMany({
+      where: { quizId },
+      include: { question: true },
     });
-    const examsTaken = attempts.length;
 
-    // Attendance: lessons attended / total lessons in student's approved groups
-    const memberships = await this.prisma.membership.findMany({ where: { studentId, status: 'APPROVED' }, select: { groupId: true } });
-    const groupIds = memberships.map(m => m.groupId);
-    const totalLessons = await this.prisma.lesson.count({ where: { groups: { some: { groupId: { in: groupIds } } } } });
-    const attendedLessonCount = await this.prisma.lesson.count({ where: { groups: { some: { groupId: { in: groupIds } } } } });
-    const attendancePercent = totalLessons > 0 ? Math.round((attendedLessonCount / totalLessons) * 100) : 0;
-
-    // Results per exam
-    const results = await this.prisma.quizAttempt.findMany({
-      where: { studentId },
-      include: { quiz: true }
-    });
-    const examOverview = results.map(r => ({
-      examId: r.quizId,
-      examName: r.quiz.title,
-      date: r.quiz.startsAt,
-      score: r.score ?? 0,
-      pass: (r.score ?? 0) >= 50
-    }));
-
-    return {
-      examsTaken,
-      attendancePercent,
-      results: examOverview
-    };
+    const maxScore = questions.reduce((sum, q) => sum + (q.question.score ?? 0), 0);
+    return (maxScore * thresholdPercent) / 100;
   }
 
-  // Group Analysis
-  async getGroupAnalysis(groupId: number, passingThreshold = 50) {
-    const studentsCount = await this.prisma.membership.count({ where: { groupId, status: 'APPROVED' } });
-    const examsCount = await this.prisma.quiz.count({ where: { groupId } });
-    const materialsCount = await this.prisma.lesson.count({ where: { groups: { some: { groupId } } } });
-
-    // Attendance per exam = attempts/ students
-    const quizzes = await this.prisma.quiz.findMany({ where: { groupId }, include: { attempts: true } });
-    const examsAttendance = quizzes.map(q => {
-      const attended = q.attempts.length;
-      const attendance = studentsCount > 0 ? Math.round((attended / studentsCount) * 100) : 0;
-      const absence = 100 - attendance;
-      const scores = q.attempts.map(a => a.score ?? 0);
-      const avg = scores.length ? Math.round(scores.reduce((s, n) => s + n, 0) / scores.length) : 0;
-      const success = studentsCount > 0 ? Math.round((q.attempts.filter(a => (a.score ?? 0) >= passingThreshold).length / studentsCount) * 100) : 0;
-      const failure = 100 - success;
-      return { examId: q.id, name: q.title, attendance, absence, averageScore: avg, success, failure };
+  // ===================== Student Analysis =====================
+  async getStudentAnalysis(studentId: number, thresholdPercent = 50) {
+    const memberships = await this.prisma.membership.findMany({
+      where: { studentId, status: 'APPROVED' },
+      select: { groupId: true },
     });
+    const groupIds = memberships.map(m => m.groupId);
+
+    const attempts = await this.prisma.quizAttempt.findMany({
+      where: { studentId },
+      include: { quiz: true },
+    });
+
+    const examsTaken = attempts.length;
+
+    const totalQuizzes = await this.prisma.quiz.count({
+      where: { groupId: { in: groupIds }, status: 'PUBLIC' as any },
+    });
+    const attendedQuizzes = await this.prisma.quizAttempt.count({
+      where: {
+        studentId,
+        quiz: { groupId: { in: groupIds }, status: 'PUBLIC' as any },
+      },
+    });
+    const attendancePercent =
+      totalQuizzes > 0 ? Math.round((attendedQuizzes / totalQuizzes) * 100) : 0;
+
+    const results = await Promise.all(
+      attempts
+        .filter(r => r.quiz.status === ('PUBLIC' as any))
+        .map(async r => {
+          const passScore = await this.calculatePassingScore(r.quizId, thresholdPercent);
+          return {
+            examId: r.quizId,
+            examName: r.quiz.title,
+            date: r.quiz.startsAt,
+            score: r.score ?? 0,
+            pass: (r.score ?? 0) >= passScore,
+          };
+        }),
+    );
+
+    return { examsTaken, attendancePercent, results };
+  }
+
+  // ===================== Group Analysis =====================
+  async getGroupAnalysis(groupId: number, thresholdPercent = 50) {
+    const studentsCount = await this.prisma.membership.count({
+      where: { groupId, status: 'APPROVED' },
+    });
+    const examsCount = await this.prisma.quiz.count({
+      where: { groupId, status: 'PUBLIC' as any },
+    });
+    const materialsCount = await this.prisma.lesson.count({
+      where: { groups: { some: { groupId } } },
+    });
+
+    const quizzes = await this.prisma.quiz.findMany({
+      where: { groupId, status: 'PUBLIC' as any },
+      include: { attempts: true },
+    });
+
+    const examsAttendance = await Promise.all(
+      quizzes.map(async q => {
+        const attended = q.attempts.length;
+        const attendance = studentsCount > 0 ? Math.round((attended / studentsCount) * 100) : 0;
+        const absence = 100 - attendance;
+
+        const scores = q.attempts.map(a => a.score ?? 0);
+        const avg = scores.length
+          ? Math.round((scores.reduce((s, n) => s + n, 0) / scores.length) * 100) / 100
+          : 0;
+
+        const passScore = await this.calculatePassingScore(q.id, thresholdPercent);
+
+        const successAmongParticipants =
+          attended > 0
+            ? Math.round(
+              (q.attempts.filter(a => (a.score ?? 0) >= passScore).length / attended) * 100,
+            )
+            : 0;
+
+        const successClassWide =
+          studentsCount > 0
+            ? Math.round(
+              (q.attempts.filter(a => (a.score ?? 0) >= passScore).length / studentsCount) * 100,
+            )
+            : 0;
+
+        return {
+          examId: q.id,
+          name: q.title,
+          attendance,
+          absence,
+          averageScore: avg,
+          successAmongParticipants,
+          successClassWide,
+        };
+      }),
+    );
 
     return {
       counts: { students: studentsCount, exams: examsCount, materials: materialsCount },
-      exams: examsAttendance
+      exams: examsAttendance,
     };
   }
 
-  // Exam Analysis
-  async getExamAnalysis(quizId: number, passingThreshold = 50) {
-    const quiz = await this.prisma.quiz.findUnique({ where: { id: quizId }, include: { attempts: { include: { studentAnswers: { include: { question: true } } } }, group: { include: { memberships: { where: { status: 'APPROVED' } } } } } });
+  // ===================== Exam Analysis =====================
+  async getExamAnalysis(quizId: number, thresholdPercent = 50) {
+    const quiz = await this.prisma.quiz.findUnique({
+      where: { id: quizId },
+      include: {
+        attempts: {
+          include: {
+            studentAnswers: { include: { question: true } }
+          }
+        },
+        group: {
+          include: {
+            memberships: { where: { status: 'APPROVED' } }
+          }
+        },
+        questions: {
+          include: { question: true }
+        }
+      }
+    });
+
     const totalStudents = quiz?.group.memberships.length ?? 0;
     const participants = quiz?.attempts.length ?? 0;
     const attendance = totalStudents > 0 ? Math.round((participants / totalStudents) * 100) : 0;
 
-    const studentsScores = (quiz?.attempts ?? []).map(a => ({ studentId: a.studentId, score: a.score ?? 0 }));
+    // إجمالي درجات الكويز
+    const totalScore = quiz?.questions.reduce((sum, q) => sum + (q.question.score ?? 0), 0) ?? 0;
+    const passScore = (totalScore * thresholdPercent) / 100;
 
-    // Wrongly answered questions count
+    // درجات الطلاب (خام + نسبة مئوية)
+    const studentsScores = (quiz?.attempts ?? []).map(a => {
+      const rawScore = a.score ?? 0;
+      const percent = totalScore > 0 ? (rawScore / totalScore) * 100 : 0;
+      return { studentId: a.studentId, score: rawScore, percent };
+    });
+
+    // أصعب الأسئلة
     const wrongCount: Record<number, number> = {};
     for (const attempt of quiz?.attempts ?? []) {
       for (const ans of attempt.studentAnswers as any[]) {
@@ -87,16 +174,23 @@ export class AnalysisService {
       .slice(0, 10)
       .map(([questionId, count]) => ({ questionId: Number(questionId), wrongCount: count }));
 
-    // Score distribution buckets
-    const buckets = [0, 50, 70, 85, 100];
+    // توزيع الدرجات بناءً على النسبة المئوية
     const distribution = [0, 0, 0, 0];
     for (const s of studentsScores) {
-      const pct = s.score;
-      if (pct < 50) distribution[0]++; else if (pct < 70) distribution[1]++; else if (pct < 85) distribution[2]++; else distribution[3]++;
+      if (s.percent < 50) distribution[0]++;
+      else if (s.percent < 70) distribution[1]++;
+      else if (s.percent < 85) distribution[2]++;
+      else distribution[3]++;
     }
 
-    const success = totalStudents > 0 ? Math.round(((quiz?.attempts.filter(a => (a.score ?? 0) >= passingThreshold).length ?? 0) / totalStudents) * 100) : 0;
-    const failure = 100 - success;
+    // نسب النجاح
+    const successParticipants = participants > 0
+      ? Math.round(((quiz?.attempts.filter(a => (a.score ?? 0) >= passScore).length ?? 0) / participants) * 100)
+      : 0;
+
+    const successClassWide = totalStudents > 0
+      ? Math.round(((quiz?.attempts.filter(a => (a.score ?? 0) >= passScore).length ?? 0) / totalStudents) * 100)
+      : 0;
 
     return {
       participants,
@@ -104,8 +198,9 @@ export class AnalysisService {
       studentsScores,
       hardestQuestions,
       distribution: { ranges: ['0-50', '50-70', '70-85', '85-100'], counts: distribution },
-      successPercent: success,
-      failurePercent: failure
+      successParticipantsPercent: successParticipants,
+      successClassWidePercent: successClassWide
     };
   }
+
 }
