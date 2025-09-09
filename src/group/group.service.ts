@@ -283,12 +283,7 @@ export class GroupService {
   }
 
   async remove(id: number, userId: number) {
-    let group = await this.prisma.group.findUnique({ where:  { id: id, createdById: userId , memberships : {
-      some: {
-        status: 'APPROVED'
-      },
-
-    } },
+    let group = await this.prisma.group.findUnique({ where:  { id: id, createdById: userId  },
     include: {
       memberships: {
         select: {
