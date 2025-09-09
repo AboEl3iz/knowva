@@ -46,7 +46,7 @@ export class AnalysisService {
       totalQuizzes > 0 ? Math.round((attendedQuizzes / totalQuizzes) * 100) : 0;
 
     Logger.error(`attendancePercent: ${attendancePercent} | totalQuizzes: ${totalQuizzes} | attendedQuizzes: ${attendedQuizzes}`);
-
+   
     const results = await Promise.all(
       attempts
         .filter(r => r.quiz.status === ('PUBLIC' as any))
@@ -75,7 +75,9 @@ export class AnalysisService {
           Logger.log(
             `fullMark: ${fullMark} | totalQuestions: ${totalQuestions} | studentScore: ${r.score ?? 0}`,
           );
+         
           return {
+            
             examId: r.quizId,
             examName: r.quiz.title,
             subjectname: subject.title,
@@ -88,7 +90,7 @@ export class AnalysisService {
         }),
     );
 
-    return { examsTaken, attendancePercent, results };
+    return { totalQuizzes ,examsTaken, attendancePercent, results };
   }
 
   // ===================== Group Analysis =====================
