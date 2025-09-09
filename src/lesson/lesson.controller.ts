@@ -41,7 +41,7 @@ export class LessonController {
   create(@UploadedFile() file: Express.Multer.File, @Query('subjectId') subjectId: string ,@Query('groupIds') groupIds: string,@Body() CreateLessonDto : CreateLessonDto , @Req() req: any) {
 
     const groupIdArray = groupIds.split(',').map(id => +id.trim()).filter(id => !isNaN(id));
-    return this.lessonService.create(file , CreateLessonDto , +subjectId , groupIdArray , req.user.id);
+    return this.lessonService.create(file , CreateLessonDto , +subjectId , groupIdArray , +req.user.id);
   }
 
   @Get('for-subject/:subjectId')
