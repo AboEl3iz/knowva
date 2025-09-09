@@ -46,7 +46,7 @@ export class AnalysisService {
       totalQuizzes > 0 ? Math.round((attendedQuizzes / totalQuizzes) * 100) : 0;
 
     Logger.error(`attendancePercent: ${attendancePercent} | totalQuizzes: ${totalQuizzes} | attendedQuizzes: ${attendedQuizzes}`);
-   
+
     const results = await Promise.all(
       attempts
         .filter(r => r.quiz.status === ('PUBLIC' as any))
@@ -75,9 +75,9 @@ export class AnalysisService {
           Logger.log(
             `fullMark: ${fullMark} | totalQuestions: ${totalQuestions} | studentScore: ${r.score ?? 0}`,
           );
-         
+
           return {
-            
+
             examId: r.quizId,
             examName: r.quiz.title,
             subjectname: subject.title,
@@ -90,7 +90,7 @@ export class AnalysisService {
         }),
     );
 
-    return { totalQuizzes ,examsTaken, attendancePercent, results };
+    return { totalQuizzes, examsTaken, attendancePercent, results };
   }
 
   // ===================== Group Analysis =====================
@@ -107,16 +107,23 @@ export class AnalysisService {
 
     const quizzes = await this.prisma.quiz.findMany({
       where: { groupId, status: 'PUBLIC' as any },
-      include: { attempts: true },
+      include: {
+        attempts: true,
+        questions: { // 👈 This is the crucial part
+          include: {
+            question: true,
+          },
+        },
+      },
     });
 
     const examsAttendance = await Promise.all(
-      quizzes.map(async q => {
+      quizzes.map(async (q) => {
         const attended = q.attempts.length;
         const attendance = studentsCount > 0 ? Math.round((attended / studentsCount) * 100) : 0;
         const absence = 100 - attendance;
 
-        const scores = q.attempts.map(a => a.score ?? 0);
+        const scores = q.attempts.map((a) => a.score ?? 0);
         const avg = scores.length
           ? Math.round((scores.reduce((s, n) => s + n, 0) / scores.length) * 100) / 100
           : 0;
@@ -126,14 +133,14 @@ export class AnalysisService {
         const successAmongParticipants =
           attended > 0
             ? Math.round(
-              (q.attempts.filter(a => (a.score ?? 0) >= passScore).length / attended) * 100,
+              (q.attempts.filter((a) => (a.score ?? 0) >= passScore).length / attended) * 100,
             )
             : 0;
 
         const successClassWide =
           studentsCount > 0
             ? Math.round(
-              (q.attempts.filter(a => (a.score ?? 0) >= passScore).length / studentsCount) * 100,
+              (q.attempts.filter((a) => (a.score ?? 0) >= passScore).length / studentsCount) * 100,
             )
             : 0;
 
@@ -149,9 +156,44 @@ export class AnalysisService {
       }),
     );
 
+    const totalDegrees = quizzes.reduce((total, quiz) => {
+      const quizTotalScore = quiz.questions.reduce((sum, qq) => sum + qq.question.score, 0);
+      return total + quizTotalScore;
+    }, 0);
+
+    const allAttempts = quizzes.flatMap((q) => q.attempts);
+    const totalScoreForAllAttempts = allAttempts.reduce((sum, attempt) => sum + (attempt.score ?? 0), 0);
+    const avgDegreesForWholeGroup = allAttempts.length > 0 ? totalScoreForAllAttempts / allAttempts.length : 0;
+
+    const roundedAvgDegrees = Math.round(avgDegreesForWholeGroup * 100) / 100;
+
     return {
-      counts: { students: studentsCount, exams: examsCount, materials: materialsCount },
+      counts: {
+        students: {
+          total: studentsCount,
+          data: await this.prisma.membership.findMany({
+            where: {
+              groupId,
+              status: 'APPROVED',
+            },
+            include: {
+              student: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  avatar: true,
+                },
+              },
+            },
+          }),
+        },
+        exams: examsCount,
+        materials: materialsCount,
+      },
       exams: examsAttendance,
+      averageGroupScore: roundedAvgDegrees,
+      totalPossibleDegrees: totalDegrees,
     };
   }
 

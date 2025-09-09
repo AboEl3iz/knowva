@@ -24,4 +24,7 @@ export class CreateQuizDto {
     @IsOptional()
     @IsBoolean()
     canChangeAnswer?: boolean;
+
+    
+    Duration: number
 }
