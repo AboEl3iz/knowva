@@ -294,7 +294,7 @@ export class GroupService {
         select: {
           student: { select: { id: true, name: true, email: true } },
         },
-        where: { status: 'APPROVED' },
+        
       },
     }
    });

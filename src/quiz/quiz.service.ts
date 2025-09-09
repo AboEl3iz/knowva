@@ -8,6 +8,7 @@ import { UpdateQuestionDto } from './dto/update-question.dto';
 import { validate } from 'class-validator';
 import { NotificationService } from 'src/notification/notification.service';
 import { NotificationGateway } from 'src/notification/notification.gateway';
+import e from 'express';
 
 @Injectable()
 export class QuizService {
@@ -16,7 +17,23 @@ export class QuizService {
     ) { }
 
     async getQuizes(userId: number) {
-        return this.prisma.quiz.findMany({ where: { createdById: userId } });
+        let quizzes = await this.prisma.quiz.findMany({ where: { createdById: userId } });
+        return quizzes.map(
+            (q) => {
+                let currentStatus: "UPCOMING" | "ONGOING" | "ENDED";
+                if (new Date(q.startsAt) > new Date()) {
+                    currentStatus = "UPCOMING";
+                } else if (new Date(q.endsAt) > new Date()) {
+                    currentStatus = "ONGOING";
+                } else {
+                    currentStatus = "ENDED";
+                }
+                return {
+                    ...q,
+                    currentStatus
+                }
+            }
+        );
     }
 
     async getQuiz(id: number, userId: number) {
@@ -25,7 +42,22 @@ export class QuizService {
             include: { questions: { include: { question: true } } } as any
         });
         if (!quiz) throw new BadRequestException('Quiz not found');
-        return quiz;
+        return quiz.map(
+            (q) => {
+                let currentStatus: "UPCOMING" | "ONGOING" | "ENDED";
+                if (new Date(q.startsAt) > new Date()) {
+                    currentStatus = "UPCOMING";
+                } else if (new Date(q.endsAt) > new Date()) {
+                    currentStatus = "ONGOING";
+                } else {
+                    currentStatus = "ENDED";
+                }
+                return {
+                    ...q,
+                    currentStatus
+                }
+            }
+        );
     }
 
     async createQuiz(userId: number, createQuizDto: CreateQuizDto) {
@@ -71,11 +103,43 @@ export class QuizService {
     }
 
     async getDraftQuizzes(userId: number) {
-        return this.prisma.quiz.findMany({ where: { createdById: userId, status: 'DRAFT' as any } });
+        let quizzes = await this.prisma.quiz.findMany({ where: { createdById: userId, status: 'DRAFT' as any } });
+        return quizzes.map(
+            (q) => {
+                let currentStatus: "UPCOMING" | "ONGOING" | "ENDED";
+                if (new Date(q.startsAt) > new Date()) {
+                    currentStatus = "UPCOMING";
+                } else if (new Date(q.endsAt) > new Date()) {
+                    currentStatus = "ONGOING";
+                } else {
+                    currentStatus = "ENDED";
+                }
+                return {
+                    ...q,
+                    currentStatus
+                }
+            }
+        )
     }
 
     async getPublicQuizzes(userId: number) {
-        return this.prisma.quiz.findMany({ where: { createdById: userId, status: 'PUBLIC' as any } });
+        let   quizzes = await this.prisma.quiz.findMany({ where: { createdById: userId, status: 'PUBLIC' as any } });
+        return quizzes.map(
+            (q) => {
+                let currentStatus: "UPCOMING" | "ONGOING" | "ENDED";
+                if (new Date(q.startsAt) > new Date()) {
+                    currentStatus = "UPCOMING";
+                } else if (new Date(q.endsAt) > new Date()) {
+                    currentStatus = "ONGOING";
+                } else {
+                    currentStatus = "ENDED";
+                }
+                return {
+                    ...q,
+                    currentStatus
+                }
+            }
+        )
     }
 
     async duplicateQuiz(id: number, userId: number) {
