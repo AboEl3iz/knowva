@@ -95,9 +95,27 @@ export class AnalysisService {
 
   // ===================== Group Analysis =====================
   async getGroupAnalysis(groupId: number, thresholdPercent = 50) {
-    const studentsCount = await this.prisma.membership.count({
+    // Fetches students with their quiz attempts
+    const groupMemberships = await this.prisma.membership.findMany({
       where: { groupId, status: 'APPROVED' },
+      include: {
+        student: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatar: true,
+            quizAttempts: {
+              where: { quiz: { groupId, status: 'PUBLIC' as any } },
+              select: { score: true },
+            },
+          },
+        },
+      },
     });
+
+    const studentsCount = groupMemberships.length;
+
     const examsCount = await this.prisma.quiz.count({
       where: { groupId, status: 'PUBLIC' as any },
     });
@@ -109,7 +127,7 @@ export class AnalysisService {
       where: { groupId, status: 'PUBLIC' as any },
       include: {
         attempts: true,
-        questions: { // 👈 This is the crucial part
+        questions: {
           include: {
             question: true,
           },
@@ -156,44 +174,38 @@ export class AnalysisService {
       }),
     );
 
-    const totalDegrees = quizzes.reduce((total, quiz) => {
+    // 1. Calculate the total possible score for all public quizzes
+    const totalPossibleDegrees = quizzes.reduce((total, quiz) => {
       const quizTotalScore = quiz.questions.reduce((sum, qq) => sum + qq.question.score, 0);
       return total + quizTotalScore;
     }, 0);
 
-    const allAttempts = quizzes.flatMap((q) => q.attempts);
-    const totalScoreForAllAttempts = allAttempts.reduce((sum, attempt) => sum + (attempt.score ?? 0), 0);
-    const avgDegreesForWholeGroup = allAttempts.length > 0 ? totalScoreForAllAttempts / allAttempts.length : 0;
+    // 2. Map through group members to add per-student analysis
+    const studentsWithAnalysis = groupMemberships.map((membership) => {
+      const studentAttempts = membership.student.quizAttempts;
+      const studentTotalScore = studentAttempts.reduce((sum, attempt) => sum + (attempt.score ?? 0), 0);
+      const studentAverageScore =
+        studentAttempts.length > 0
+          ? Math.round((studentTotalScore / studentAttempts.length) * 100) / 100
+          : 0;
 
-    const roundedAvgDegrees = Math.round(avgDegreesForWholeGroup * 100) / 100;
+      return {
+        ...membership.student,
+        totalPossibleDegrees,
+        averageGroupScore: studentAverageScore,
+      };
+    });
 
     return {
       counts: {
         students: {
           total: studentsCount,
-          data: await this.prisma.membership.findMany({
-            where: {
-              groupId,
-              status: 'APPROVED',
-            },
-            include: {
-              student: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                  avatar: true,
-                },
-              },
-            },
-          }),
+          data: studentsWithAnalysis, // 👈 Use the new array with analysis
         },
         exams: examsCount,
         materials: materialsCount,
       },
       exams: examsAttendance,
-      averageGroupScore: roundedAvgDegrees,
-      totalPossibleDegrees: totalDegrees,
     };
   }
 
