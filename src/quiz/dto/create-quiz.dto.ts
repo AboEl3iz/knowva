@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsDateString, IsNumber, IsBoolean, IsOptional } from "class-validator";
+import { IsNotEmpty, IsString, IsDateString, IsNumber, Length, IsIn } from "class-validator";
 
 export class CreateQuizDto {
     @IsNotEmpty()
@@ -14,6 +14,12 @@ export class CreateQuizDto {
     groupId: number;
 
     @IsNotEmpty()
+    @IsString()
+    @Length(2)
+    @IsIn(["en", "ar"])
+    language: "en" | "ar";
+
+    @IsNotEmpty()
     @IsDateString()
     startsAt: Date;
 
@@ -21,7 +27,7 @@ export class CreateQuizDto {
     @IsDateString()
     endsAt: Date;
 
-    @IsOptional()
-    @IsBoolean()
-    canChangeAnswer?: boolean;
+    @IsNotEmpty()
+    @IsNumber()
+    durationMins: number;
 }

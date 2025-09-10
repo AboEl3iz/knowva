@@ -45,18 +45,21 @@ model User {
   quizAttempts QuizAttempt[]
 
   OtpToken OtpToken[]
-  
+
   ConversationStudent Conversation[] @relation("StudentConversations")
 
   ConversationTeacher Conversation[] @relation("TeacherConversations")
-  
+
   Group Group[]
 
   accounts Account[]
 
   createdQuizzes Quiz[]
 
-  createdQuestions Question[]
+  createdQuestions          Question[]
+  studentFeedbacks          StudentFeedback[] @relation("StudentFeedbacks")
+  teacherRequestedFeedbacks StudentFeedback[] @relation("TeacherFeedbacks")
+  StudentFeedback           StudentFeedback[]
 }
 
 enum Gender {
@@ -97,7 +100,7 @@ model Subject {
   lessons       Lesson[]
   quizzes       Quiz[]
   conversations Conversation[]
-  createdAt   DateTime  @default(now())  
+  createdAt     DateTime       @default(now())
 }
 
 model Group {
@@ -107,14 +110,14 @@ model Group {
   subject     Subject      @relation(fields: [subjectId], references: [id])
   subjectId   Int
   memberships Membership[]
-  createdBy   User @relation(fields: [createdById] , references: [id])
+  createdBy   User         @relation(fields: [createdById], references: [id])
   createdById Int
-  
+
   Conversation Conversation[]
 
   Lesson Lesson[]
-  
-  quizzes     Quiz[]
+
+  quizzes Quiz[]
 }
 
 model Membership {
@@ -132,9 +135,6 @@ enum Status {
   REJECTED
 }
 
-
-
-
 model Lesson {
   id        Int      @id @default(autoincrement())
   type      String
@@ -144,8 +144,8 @@ model Lesson {
   createdAt DateTime @default(now())
   subject   Subject  @relation(fields: [subjectId], references: [id])
   subjectId Int
-  group Group @relation(fields: [groupId] , references: [id])
-  groupId Int
+  group     Group    @relation(fields: [groupId], references: [id])
+  groupId   Int
 }
 
 enum LessonType {
@@ -177,19 +177,20 @@ enum LessonType {
 // }
 
 model Quiz {
-  id              Int      @id @default(autoincrement())
-  title           String
-  status          String   @default("DRAFT")
-  subject         Subject  @relation(fields: [subjectId], references: [id])
-  subjectId       Int
-  group           Group    @relation(fields: [groupId], references: [id])
-  groupId         Int
-  createdBy       User     @relation(fields: [createdById], references: [id])
-  createdById     Int
-  startsAt        DateTime
-  endsAt          DateTime
-  isActive        Boolean  @default(false)
-  canChangeAnswer Boolean  @default(true)
+  id           Int      @id @default(autoincrement())
+  title        String
+  status       String   @default("DRAFT")
+  subject      Subject  @relation(fields: [subjectId], references: [id])
+  subjectId    Int
+  group        Group    @relation(fields: [groupId], references: [id])
+  groupId      Int
+  createdBy    User     @relation(fields: [createdById], references: [id])
+  createdById  Int
+  startsAt     DateTime
+  endsAt       DateTime
+  durationMins Int
+  isActive     Boolean  @default(false)
+  language     Language
 
   questions Question[]
 
@@ -198,19 +199,24 @@ model Quiz {
   @@index([id, createdById])
 }
 
+enum Language {
+  en
+  ar
+}
+
 model Question {
-  id          Int             @id @default(autoincrement())
+  id          Int              @id @default(autoincrement())
   question    String
   type        QuestionType
   options     String[]
   answer      String
-  quiz        Quiz            @relation(fields: [quizId], references: [id])
+  quiz        Quiz             @relation(fields: [quizId], references: [id])
   quizId      Int
-  createdBy   User?           @relation(fields: [createdById], references: [id])
+  createdBy   User?            @relation(fields: [createdById], references: [id])
   createdById Int?
   mode        QuestionMode
   score       Float
-  answers     StudentAnswer[]
+  answers     QuestionAnswer[]
 
   @@index([id, createdById])
 }
@@ -227,54 +233,104 @@ enum QuestionMode {
 }
 
 model QuizAttempt {
-  id             Int             @id @default(autoincrement())
-  quiz           Quiz            @relation(fields: [quizId], references: [id])
+  id             Int              @id @default(autoincrement())
+  quiz           Quiz             @relation(fields: [quizId], references: [id])
   quizId         Int
-  student        User            @relation(fields: [studentId], references: [id])
+  student        User             @relation(fields: [studentId], references: [id])
   studentId      Int
   score          Float?
-  createdAt      DateTime        @default(now())
-  studentAnswers StudentAnswer[]
+  createdAt      DateTime         @default(now())
+  studentAnswers QuestionAnswer[]
+  startedAt      DateTime         @default(now())
+  endedAt        DateTime?
+
+  feedback AttemptFeedback?
 }
 
-model StudentAnswer {
-  id            Int         @id @default(autoincrement())
-  question      Question    @relation(fields: [questionId], references: [id])
-  questionId    Int
-  quizAttempt   QuizAttempt @relation(fields: [quizAttemptId], references: [id])
-  quizAttemptId Int
-  answer        String
-  score         Float       @default(0)
+model QuestionAnswer {
+  id                Int                @id @default(autoincrement())
+  question          Question           @relation(fields: [questionId], references: [id])
+  questionId        Int
+  quizAttempt       QuizAttempt        @relation(fields: [quizAttemptId], references: [id])
+  quizAttemptId     Int
+  answer            String
+  score             Float              @default(0)
+  QuestionFeedbacks QuestionFeedback[]
+  createdAt         DateTime           @default(now())
 
   @@unique([quizAttemptId, questionId])
+  @@map("StudentAnswer")
+}
+
+model AttemptFeedback {
+  id               Int                @id @default(autoincrement())
+  attempt          QuizAttempt        @relation(fields: [attemptId], references: [id])
+  attemptId        Int                @unique
+  summary          String
+  weakPoints       String[]
+  goodPoints       String[]
+  QuestionFeedback QuestionFeedback[]
+  createdAt        DateTime           @default(now())
+}
+
+model QuestionFeedback {
+  id                Int             @id @default(autoincrement())
+  questionAnswer    QuestionAnswer  @relation(fields: [questionAnswerId], references: [id])
+  questionAnswerId  Int
+  attemptFeedback   AttemptFeedback @relation(fields: [attemptFeedbackId], references: [id])
+  attemptFeedbackId Int
+}
+
+model StudentFeedback {
+  id Int @id @default(autoincrement())
+
+  student   User @relation(fields: [studentId], references: [id], name: "StudentFeedbacks")
+  studentId Int
+
+  teacher   User @relation(fields: [teacherId], references: [id], name: "TeacherFeedbacks")
+  teacherId Int
+
+  progress               String
+  summaryFeedback        String
+  strongPoints           String[]
+  weakPoints             String[]
+  improvedPoints         String[]
+  declinedPoints         String[]
+  unchangedPoints        String[]
+  scoreTrend             Int[]
+  riskLevel              String
+  teachingRecommendation String
+  createdAt              DateTime @default(now())
+  User                   User?    @relation(fields: [userId], references: [id])
+  userId                 Int?
 }
 
 model Conversation {
-  id          Int       @id @default(autoincrement())
-  isGroup     Boolean   @default(false) // determines if it's a group or direct chat
-  
-  // For direct conversations (isGroup = false)
-  student     User?     @relation("StudentConversations", fields: [studentId], references: [id])
-  studentId   Int?
-  teacher     User?     @relation("TeacherConversations", fields: [teacherId], references: [id])
-  teacherId   Int?
-  
-  // For group conversations (isGroup = true)
-  group       Group?    @relation(fields: [groupId], references: [id])
-  groupId     Int?      @unique
-  
-  // Common fields
-  messages    Message[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  subjects    Subject[]
+  id      Int     @id @default(autoincrement())
+  isGroup Boolean @default(false) // determines if it's a group or direct chat
 
-  // Constraints to ensure data integrity
-  @@unique([studentId, teacherId]) // ensure one conversation per student-teacher pair
-  
+  // For direct conversations (isGroup = false)
+  student   User? @relation("StudentConversations", fields: [studentId], references: [id])
+  studentId Int?
+  teacher   User? @relation("TeacherConversations", fields: [teacherId], references: [id])
+  teacherId Int?
+
+  // For group conversations (isGroup = true)
+  group   Group? @relation(fields: [groupId], references: [id])
+  groupId Int?   @unique
+
+  // Common fields
+  messages  Message[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  subjects  Subject[]
+
   // Custom validation logic needed at application level:
   // - If isGroup = false: studentId and teacherId must be set, groupId must be null
   // - If isGroup = true: groupId must be set, studentId and teacherId must be null
+
+  // Constraints to ensure data integrity
+  @@unique([studentId, teacherId]) // ensure one conversation per student-teacher pair
 }
 
 model Message {
@@ -284,21 +340,20 @@ model Message {
   sender         User         @relation(fields: [senderId], references: [id])
   senderId       Int
   content        String
-  
-  // Enhanced fields for both direct and group messages
-  mediaUrl       String?      // for file attachments
-  mediaType      String?      // type of media (image, video, document, etc.)
-  
-  // For group messages - track delivery and read status
-  deliveredTo    String[]     @default([]) // array of user IDs who received the message
-  readBy         String[]     @default([]) // array of user IDs who read the message
-  
-  // Timestamps
-  timestamp      DateTime     @default(now())
-  createdAt      DateTime     @default(now())
-  readAt         DateTime?    // for direct messages, single read timestamp
-}
 
+  // Enhanced fields for both direct and group messages
+  mediaUrl  String? // for file attachments
+  mediaType String? // type of media (image, video, document, etc.)
+
+  // For group messages - track delivery and read status
+  deliveredTo String[] @default([]) // array of user IDs who received the message
+  readBy      String[] @default([]) // array of user IDs who read the message
+
+  // Timestamps
+  timestamp DateTime  @default(now())
+  createdAt DateTime  @default(now())
+  readAt    DateTime? // for direct messages, single read timestamp
+}
 
 model Notification {
   id        Int      @id @default(autoincrement())
