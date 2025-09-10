@@ -29,7 +29,7 @@ export class AuthService {
    * @param createAuthDto 
    * @returns RegisterResponse
    */
-  async create(createAuthDto: CreateAuthDto, file: Express.Multer.File): Promise<RegisterResponse> {
+  async create(createAuthDto: CreateAuthDto, file?: Express.Multer.File): Promise<RegisterResponse> {
     const useremail = await this.prisma.user.findUnique({
       where: {
         email: createAuthDto.email
@@ -42,27 +42,54 @@ export class AuthService {
       throw new BadRequestException('Password does not match');
     }
     const hashedPassword = await this.hashPassword(createAuthDto.password);
-    const result: UploadApiResponse = await this.cloudinaryService.uploadFile(file, 'usersAvatars');
+
     let role: Role;
+    let userData;
+    let gender;
     if (createAuthDto.roleToken === this.configService.get<string>('TEACHER_TOKEN')) {
       role = Role.TEACHER;
     } else {
 
       role = Role.STUDENT;
     }
-    const user = await this.prisma.user.create({
-      data: {
-        role: role,
-        email: createAuthDto.email,
-        password: hashedPassword,
-        name: createAuthDto.name,
-        phone: createAuthDto.phoneNumber,
-        avatar: result.secure_url,
-        publicId: result.public_id,
-        bio: createAuthDto.bio,
-        gender: createAuthDto.gender
-      }
-    });
+    if(!createAuthDto.gender){
+      gender = undefined
+      
+    }else{
+      gender = createAuthDto.gender === 'male' ? 'MALE' : 'FEMALE'
+    }
+
+    if (!file) {
+      userData = {
+        data: {
+          role: role,
+          email: createAuthDto.email,
+          password: hashedPassword,
+          name: createAuthDto.name,
+          phone: createAuthDto.phoneNumber,
+          bio: createAuthDto.bio,
+          gender: gender
+        }
+      };
+    } else {
+      const result: UploadApiResponse = await this.cloudinaryService.uploadFile(file, 'usersAvatars');
+      userData = {
+        data: {
+          role: role,
+          email: createAuthDto.email,
+          password: hashedPassword,
+          name: createAuthDto.name,
+          phone: createAuthDto.phoneNumber,
+          avatar: result.secure_url,
+          bio: createAuthDto.bio,
+          gender: gender,
+          publicId: result.public_id,
+
+        }
+      };
+    }
+
+    const user = await this.prisma.user.create(userData);
     const token = await this.generateJwt({ id: user.id, role: user.role });
 
     return {
@@ -123,7 +150,8 @@ export class AuthService {
       }
     });
 
-    await this.mailService.sendEmail({
+    // fire-and-forget email sending to avoid blocking the response if SMTP is slow
+    this.mailService.sendEmail({
       to: email,
       subject: 'Password Reset OTP',
       template: 'forgot-password', // match the template filename without .hbs
@@ -132,7 +160,7 @@ export class AuthService {
         otp,
         year: new Date().getFullYear(),
       },
-    });
+    }).catch(() => {});
 
     return { message: 'OTP sent to your email' };
 
@@ -186,11 +214,33 @@ export class AuthService {
       name: user.name,
       email: user.email,
       role: user.role,
-      phoneNumber: user.phone ?? '',
+      phone: user.phone ?? '',
       avatar: user.avatar ?? '',
       bio: user.bio ?? '',
       createdAt: user.createdAt,
-      gender: user.gender ?? undefined
+      gender: user.gender ?? '',
+    };
+  }
+
+  async getstudentProfile(id: number): Promise<IUser> {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: id
+      }
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      phone: user.phone ?? '',
+      avatar: user.avatar ?? '',
+      bio: user.bio ?? '',
+      createdAt: user.createdAt,
+      gender: user.gender ?? '',
     };
   }
 
@@ -202,47 +252,46 @@ export class AuthService {
    * @returns UpdateProfileResponse
    */
 
-  async update(id: number, updateAuthDto: UpdateAuthDto, file: Express.Multer.File): Promise<IUser> {
+  async update(
+  id: number,
+  updateAuthDto: UpdateAuthDto,
+  file?: Express.Multer.File
+): Promise<IUser> {
+  const user = await this.prisma.user.findUnique({ where: { id } });
+  if (!user) throw new NotFoundException('User not found');
 
-    const user = await this.prisma.user.findUnique({
-      where: {
-        id: id
-      }
-    });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-    let updatedData: Partial<User> = { ...updateAuthDto };
-    if (updateAuthDto.password) {
-      updatedData.password = await this.hashPassword(updateAuthDto.password);
-    }
-    if (file) {
-      const result = await this.cloudinaryService.uploadFile(file, 'usersAvatars');
-      if (result) {
+  // start with DTO values
+  let updatedData: any = { ...updateAuthDto };
 
-        updatedData = { ...updatedData, avatar: result.url };
-      }
-
-    }
-    const updatedUser = await this.prisma.user.update({
-      where: {
-        id: id
-      },
-      data: updatedData
-    });
-    // const token = await this.generateJwt({ id: updatedUser.id, role: updatedUser.role });
-    return {
-      id: updatedUser.id,
-      name: updatedUser.name,
-      email: updatedUser.email,
-      role: updatedUser.role,
-      phoneNumber: updatedUser.phone ?? '',
-      avatar: updatedUser.avatar ?? '',
-      bio: updatedUser.bio ?? '',
-      createdAt: updatedUser.createdAt,
-      gender: updatedUser.gender ?? undefined
-    };
+  if (updateAuthDto.password) {
+    updatedData.password = await this.hashPassword(updateAuthDto.password);
   }
+
+  if (file) {
+    const result = await this.cloudinaryService.uploadFile(file, 'usersAvatars');
+    if (result) {
+      updatedData.avatar = result.url;
+    }
+  }
+
+  const updatedUser = await this.prisma.user.update({
+    where: { id },
+    data: updatedData,
+  });
+
+  return {
+    id: updatedUser.id,
+    name: updatedUser.name,
+    email: updatedUser.email,
+    role: updatedUser.role,
+    phone: updatedUser.phone ?? '',
+    avatar: updatedUser.avatar ?? '',
+    bio: updatedUser.bio ?? '',
+    createdAt: updatedUser.createdAt,
+    gender: updatedUser.gender ?? '',
+  };
+}
+
 
   /**
    * 

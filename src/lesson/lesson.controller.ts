@@ -31,15 +31,17 @@ export class LessonController {
   )
   
   /**
-   * Creates a new lesson in the given group and subject for the current user
+   * Creates a new lesson in the given groups and subject for the current user
    * @param file The file to upload to the lesson
    * @param subjectId The id of the subject that this lesson belongs to
-   * @param groupId The id of the group that this lesson belongs to
+   * @param groupIds Comma-separated list of group IDs that this lesson belongs to
    * @param CreateLessonDto The lesson data to create
    * @returns The created lesson object
    */
-  create(@UploadedFile() file: Express.Multer.File, @Query('subjectId') subjectId: string ,@Query('groupId') groupId: string,@Body() CreateLessonDto : CreateLessonDto , @Req() req: any) {
-    return this.lessonService.create(file , CreateLessonDto , +subjectId , +groupId , req.user.id);
+  create(@UploadedFile() file: Express.Multer.File, @Query('subjectId') subjectId: string ,@Query('groupIds') groupIds: string,@Body() CreateLessonDto : CreateLessonDto , @Req() req: any) {
+
+    const groupIdArray = groupIds.split(',').map(id => +id.trim()).filter(id => !isNaN(id));
+    return this.lessonService.create(file , CreateLessonDto , +subjectId , groupIdArray , +req.user.id);
   }
 
   @Get('for-subject/:subjectId')
@@ -82,5 +84,71 @@ export class LessonController {
    */
   remove(@Param('id') id: string) {
     return this.lessonService.remove(+id);
+  }
+
+  // @Post('add-to-any-group')
+  // @Roles(Role.TEACHER)
+  // @UseGuards(AuthenticationGuard,AuthorizationGuard)
+  // @UseInterceptors(
+  //   FileInterceptor('file'  , {
+  //     storage: memoryStorage(),
+
+  //     fileFilter: (req, file, cb) => {
+  //       if (!file) {
+  //         return cb(new BadRequestException('File is required'), false);
+  //       }
+  //       cb(null, true);
+  //     }
+  //   }),
+  // )
+  // /**
+  //  * Adds a lesson to any groups (not necessarily owned by the teacher)
+  //  * @param file The file to upload to the lesson
+  //  * @param subjectId The id of the subject that this lesson belongs to
+  //  * @param groupIds Comma-separated list of group IDs that this lesson belongs to
+  //  * @param CreateLessonDto The lesson data to create
+  //  * @returns The created lesson object
+  //  */
+  // addLessonToAnyGroup(@UploadedFile() file: Express.Multer.File, @Query('subjectId') subjectId: string ,@Query('groupIds') groupIds: string,@Body() CreateLessonDto : CreateLessonDto , @Req() req: any) {
+  //   const groupIdArray = groupIds.split(',').map(id => +id.trim()).filter(id => !isNaN(id));
+  //   return this.lessonService.addLessonToAnyGroup(file , CreateLessonDto , +subjectId , groupIdArray , req.user.id);
+  // }
+
+  @Get('for-group/:groupId')
+  /**
+   * Retrieves all lessons for the given group id
+   * @param groupId the id of the group to find lessons for
+   * @returns an array of lesson objects
+   */
+  getLessonsForGroup(@Param('groupId', ParseIntPipe) groupId: number) {
+    return this.lessonService.getLessonsForGroup(groupId);
+  }
+
+  @Post(':lessonId/add-to-groups')
+  @Roles(Role.TEACHER)
+  @UseGuards(AuthenticationGuard,AuthorizationGuard)
+  /**
+   * Adds an existing lesson to additional groups
+   * @param lessonId The id of the lesson to add to groups
+   * @param groupIds Comma-separated list of group IDs to add the lesson to
+   * @returns The updated lesson object
+   */
+  addLessonToGroups(@Param('lessonId', ParseIntPipe) lessonId: number, @Query('groupIds') groupIds: string, @Req() req: any) {
+    const groupIdArray = groupIds.split(',').map(id => +id.trim()).filter(id => !isNaN(id));
+    return this.lessonService.addLessonToGroups(lessonId, groupIdArray, req.user.id);
+  }
+
+  @Delete(':lessonId/remove-from-groups')
+  @Roles(Role.TEACHER)
+  @UseGuards(AuthenticationGuard,AuthorizationGuard)
+  /**
+   * Removes an existing lesson from specified groups
+   * @param lessonId The id of the lesson to remove from groups
+   * @param groupIds Comma-separated list of group IDs to remove the lesson from
+   * @returns The updated lesson object
+   */
+  removeLessonFromGroups(@Param('lessonId', ParseIntPipe) lessonId: number, @Query('groupIds') groupIds: string, @Req() req: any) {
+    const groupIdArray = groupIds.split(',').map(id => +id.trim()).filter(id => !isNaN(id));
+    return this.lessonService.removeLessonFromGroups(lessonId, groupIdArray, req.user.id);
   }
 }

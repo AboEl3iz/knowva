@@ -44,12 +44,19 @@ export class SubjectController {
     return this.subjectService.findOne(+id);
   }
 
-  @Get('all')
+  @Get('all-by-teacher')
+  @Roles(Role.TEACHER)
+  @UseGuards(AuthenticationGuard)
   /**
    * @description Retrieve all subjects
    * @method findall
    * @returns An array of subject objects
    */
+  findallforteacher(@Req () req: any) {
+    return this.subjectService.findallforteacher(+req.user.id);
+  }
+
+  @Get('all')
   findall(){
     return this.subjectService.findall();
   }

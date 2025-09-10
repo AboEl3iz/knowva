@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Delete, Req, UseGuards, Query, Logger, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Delete, Req, UseGuards, Query, Logger, UploadedFile, UseInterceptors, BadRequestException, Param } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { CreateAuthDto } from './dto/create-auth.dto';
 import { UpdateAuthDto } from './dto/update-auth.dto';
@@ -29,7 +29,7 @@ export class AuthController {
    * @param createAuthDto 
    * @returns RegisterResponse
    */
-  create(@Body() createAuthDto: CreateAuthDto, @UploadedFile() file: Express.Multer.File) {
+  create(@Body() createAuthDto: CreateAuthDto, @UploadedFile() file?: Express.Multer.File) {
     return this.authService.create(createAuthDto , file);
   }
 
@@ -75,6 +75,18 @@ export class AuthController {
   getProfile(@Req() req: any) {
 
     return this.authService.getProfile(+req.user.id);
+  }
+
+  @Get('get-profile/:id')
+  @UseGuards(AuthenticationGuard)
+  /**
+   * Get user profile
+   * @param req the express request object
+   * @returns { id, name, email, role }
+   */
+  getstudentProfile(@Param('id') id: string) {
+
+    return this.authService.getProfile(+id);
   }
 
   @Patch('update-profile')

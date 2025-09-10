@@ -15,6 +15,10 @@ import { ChatService } from './chat.service';
 import { CreateConversationDto } from './dto/create-chat.dto';
 import { CreateMessageDto } from './dto/create-massege.dto';
 import { PaginationDto } from './dto/pagination.dto';
+import { Roles } from 'src/decorator/decorator/roles.decorator';
+import { Role } from 'src/decorator/enums/roles';
+import { AuthorizationGuard } from 'src/guards/authorization.guard';
+
 
 @Controller('conversations')
 @UseGuards(AuthenticationGuard)
@@ -38,15 +42,20 @@ export class ChatController {
 
     // Group conversation (for students + teacher of the subject)
     @Post('group/:groupId')
+    @Roles(Role.TEACHER)
+    @UseGuards(AuthorizationGuard)
+    
     /**
-     * Get or create group conversation for given group ID
-     * @param groupId Group ID
+     * Get or create group conversation for a given subject ID
+     * @param req Express request
+     * @param groupId ID of the subject
      * @returns Conversation object
      */
     async getOrCreateGroupConversation(
         @Param('groupId', ParseIntPipe) groupId: number,
+        @Req() req : any
     ) {
-        return this.chatService.getOrCreateGroupConversation(groupId);
+        return this.chatService.getOrCreateGroupConversation(groupId , +req.user.id);
     }
 
     // All conversations (direct + group)

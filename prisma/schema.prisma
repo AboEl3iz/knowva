@@ -60,6 +60,7 @@ model User {
   studentFeedbacks          StudentFeedback[] @relation("StudentFeedbacks")
   teacherRequestedFeedbacks StudentFeedback[] @relation("TeacherFeedbacks")
   StudentFeedback           StudentFeedback[]
+  Lesson                    Lesson[]
 }
 
 enum Gender {
@@ -103,19 +104,25 @@ model Subject {
   createdAt     DateTime       @default(now())
 }
 
+enum GroupStatus {
+  ACTIVE
+  COMPLETED
+  INACTIVE
+}
+
 model Group {
-  id          Int          @id @default(autoincrement())
-  name        String
-  capacity    Int
-  subject     Subject      @relation(fields: [subjectId], references: [id])
-  subjectId   Int
-  memberships Membership[]
-  createdBy   User         @relation(fields: [createdById], references: [id])
-  createdById Int
-
+  id           Int            @id @default(autoincrement())
+  name         String
+  capacity     Int
+  status       GroupStatus    @default(ACTIVE) // 👈 new status field
+  subject      Subject        @relation(fields: [subjectId], references: [id])
+  subjectId    Int
+  memberships  Membership[]
+  createdBy    User           @relation(fields: [createdById], references: [id])
+  createdById  Int
   Conversation Conversation[]
-
-  Lesson Lesson[]
+  lessons      LessonGroup[]
+  createdAt    DateTime       @default(now())
 
   quizzes Quiz[]
 }
@@ -136,16 +143,29 @@ enum Status {
 }
 
 model Lesson {
+  id          Int           @id @default(autoincrement())
+  type        String
+  title       String
+  description String
+  url         String
+  createdBy   User          @relation(fields: [createdById], references: [id])
+  createdById Int
+  publicId    String
+  createdAt   DateTime      @default(now())
+  subject     Subject       @relation(fields: [subjectId], references: [id])
+  subjectId   Int
+  groups      LessonGroup[]
+}
+
+model LessonGroup {
   id        Int      @id @default(autoincrement())
-  type      String
-  title     String
-  url       String
-  publicId  String
-  createdAt DateTime @default(now())
-  subject   Subject  @relation(fields: [subjectId], references: [id])
-  subjectId Int
-  group     Group    @relation(fields: [groupId], references: [id])
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  lessonId  Int
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
   groupId   Int
+  createdAt DateTime @default(now())
+
+  @@unique([lessonId, groupId])
 }
 
 enum LessonType {
@@ -177,24 +197,25 @@ enum LessonType {
 // }
 
 model Quiz {
-  id           Int      @id @default(autoincrement())
+  id           Int        @id @default(autoincrement())
   title        String
-  status       String   @default("DRAFT")
-  subject      Subject  @relation(fields: [subjectId], references: [id])
+  status       QuizStatus @default(DRAFT)
+  subject      Subject    @relation(fields: [subjectId], references: [id])
   subjectId    Int
-  group        Group    @relation(fields: [groupId], references: [id])
+  group        Group      @relation(fields: [groupId], references: [id])
   groupId      Int
-  createdBy    User     @relation(fields: [createdById], references: [id])
+  createdBy    User       @relation(fields: [createdById], references: [id])
   createdById  Int
   startsAt     DateTime
   endsAt       DateTime
   durationMins Int
-  isActive     Boolean  @default(false)
+  isActive     Boolean    @default(false)
   language     Language
 
-  questions Question[]
+  questions QuizQuestion[]
 
   attempts QuizAttempt[]
+  Question Question[]
 
   @@index([id, createdById])
 }
@@ -202,6 +223,11 @@ model Quiz {
 enum Language {
   en
   ar
+}
+
+enum QuizStatus {
+  DRAFT
+  PUBLIC
 }
 
 model Question {
@@ -218,7 +244,19 @@ model Question {
   score       Float
   answers     QuestionAnswer[]
 
+  quizzes QuizQuestion[]
+
   @@index([id, createdById])
+}
+
+model QuizQuestion {
+  id         Int      @id @default(autoincrement())
+  quiz       Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  quizId     Int
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId Int
+
+  @@unique([quizId, questionId])
 }
 
 enum QuestionType {
@@ -355,11 +393,22 @@ model Message {
   readAt    DateTime? // for direct messages, single read timestamp
 }
 
+enum NotificationType {
+  LESSON_ADDED
+  GROUP_JOINED
+  GROUP_LEFT
+  QUIZ_ASSIGNED
+  QUIZ_COMPLETED
+  MESSAGE_RECEIVED
+  GENERAL
+}
+
 model Notification {
-  id        Int      @id @default(autoincrement())
-  user      User     @relation(fields: [userId], references: [id])
+  id        Int              @id @default(autoincrement())
+  user      User             @relation(fields: [userId], references: [id])
   userId    Int
   message   String
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now())
+  type      NotificationType @default(GENERAL)
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
 }

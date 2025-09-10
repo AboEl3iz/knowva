@@ -9,7 +9,7 @@ import { Role } from 'src/decorator/enums/roles';
 
 @Controller('group')
 export class GroupController {
-  constructor(private readonly groupService: GroupService) {}
+  constructor(private readonly groupService: GroupService) { }
 
   @Post('create/:subjectId')
   @Roles(Role.TEACHER)
@@ -20,8 +20,8 @@ export class GroupController {
    * @param createGroupDto The group data
    * @returns The created group object
    */
-  create(@Param('subjectId') subjectId: string , @Body() createGroupDto: CreateGroupDto , @Req () req: any) {
-    return this.groupService.create(createGroupDto , +subjectId , +req.user.id);
+  create(@Param('subjectId') subjectId: string, @Body() createGroupDto: CreateGroupDto, @Req() req: any) {
+    return this.groupService.create(createGroupDto, +subjectId, +req.user.id);
   }
 
   @Get('all/:subjectId')
@@ -32,6 +32,16 @@ export class GroupController {
    */
   findAllBySubject(@Param('subjectId') subjectId: string) {
     return this.groupService.findAllBySubject(+subjectId);
+  }
+
+  @Get('all-by-teacher/:teacherId')
+  /**
+   * Retrieves all groups for the given teacher id
+   * @param teacherId the id of the teacher to find groups for
+   * @returns an array of group objects
+   */
+  findAllByTeacher(@Param('teacherId') teacherId: string) {
+    return this.groupService.findAllByTeacher(+teacherId);
   }
 
   @Get('details/:id')
@@ -54,19 +64,35 @@ export class GroupController {
    * @param req the express request object
    * @returns the updated group object
    */
-  update(@Param('id') id: string, @Body() updateGroupDto: UpdateGroupDto , @Req () req: any) {
+  update(@Param('id') id: string, @Body() updateGroupDto: UpdateGroupDto, @Req() req: any) {
     return this.groupService.update(+id, updateGroupDto, +req.user.id);
   }
 
   @Delete(':id')
   @Roles(Role.TEACHER)
   @UseGuards(AuthenticationGuard, AuthorizationGuard)
+
   /**
-   * Deletes a single group by its id
+   * Deletes a group by its id
    * @param id the id of the group to delete
+   * @param req the express request object
    * @returns a message indicating the group was deleted successfully
    */
-  remove(@Param('id') id: string) {
-    return this.groupService.remove(+id);
+  remove(@Param('id') id: string, @Req() req: any) {
+    return this.groupService.remove(+id, +req.user.id);
   }
+
+  @Patch('complete/:id')
+  @Roles(Role.TEACHER)
+  @UseGuards(AuthenticationGuard, AuthorizationGuard)
+  /**
+   * Marks a group as complete by its id
+   * @param id the id of the group to mark as complete
+   * @param req the express request object
+   * @returns a message indicating the group was marked as completed successfully
+   */
+  complete(@Param('id') id: string, @Req() req: any) {
+    return this.groupService.toggleGroupStatus(+id, +req.user.id);
+  }
+
 }

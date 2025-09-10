@@ -41,6 +41,9 @@ export class SubjectService {
 
 
   async findOne(id: number) : Promise<ISubject> {
+    if (!id) {
+      throw new BadRequestException('Subject not found');
+    }
     let subject = await this.prisma.subject.findFirst({
       where: {
         id 
@@ -104,7 +107,38 @@ export class SubjectService {
     });
   }
 
- 
+ async findallforteacher( userId: number): Promise<ISubject[]> {
+    let subjects = await this.prisma.subject.findMany({
+      where: {
+        teacherId: userId
+      },
+      include: {
+        teacher: {
+          select: {
+            password: false,
+            id: true,
+            email: true,
+            name: true,
+            
+          },
+        },
+      },
+      
+    });
+    return subjects.map((subject) => {
+      return {
+        id: subject.id.toString(),
+        name: subject.title,
+        description: subject.description || '',
+        createdAt: subject.createdAt,
+        createdBy: {
+          id: subject.teacher.id.toString(),
+          email: subject.teacher.email,
+          name: subject.teacher.name,
+        },
+      };
+    });
+  }
 
   async update(id: number, updateSubjectDto: UpdateSubjectDto , userId: number): Promise<ISubject> {
 

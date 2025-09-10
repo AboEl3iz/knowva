@@ -40,11 +40,11 @@ interface IUser {
   name: string;
   email: string;
   role: string;
-  phoneNumber?: string
+  phone?: string
   avatar?: string
   bio?: string
   createdAt?: Date
-  gender?: Gender
+  gender?: string
 }
 
 
@@ -79,8 +79,8 @@ interface IGroup {
   teacherId: string;
   subjectId: string;
   capacity: string;
-  studentIds: string[];
-  status: "completed" | "not"; // restrict to enum-like values
+  studentIds: FlutterUser[];
+  status: "complete" | "active" | "inactive"; // restrict to enum-like values
   createdAt: Date;
 }
 
@@ -97,7 +97,7 @@ interface IMaterial {
   id: string;
   name: string;
   type: string; // restrict to specific values
-  groupId: string;
+  groups: Array<{ id: string; name: string }>;
   subjectId: string;
   description: string;
   fileUrl: string;

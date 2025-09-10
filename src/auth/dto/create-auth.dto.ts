@@ -28,6 +28,6 @@ export class CreateAuthDto {
     bio?: string;
 
     @IsOptional()
-    @IsEnum(Gender, { message: 'Gender must be either "male" or "female"' })
-    gender?: Gender
+    @IsEnum(['male', 'female'], { message: "Gender should be either 'male' or 'female'" })
+    gender: string
 }

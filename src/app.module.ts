@@ -13,6 +13,7 @@ import { NotificationModule } from './notification/notification.module';
 import { ChatModule } from './chat/chat.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 // import { GroupChatModule } from './group-chat/group-chat.module';
+import { AnalysisModule } from './analysis/analysis.module';
 
 
 import config from './helper/config';
@@ -35,6 +36,7 @@ import config from './helper/config';
     NotificationModule,
     ChatModule,
     CloudinaryModule,
+    AnalysisModule,
 
   ],
   controllers: [AppController],

@@ -28,7 +28,11 @@ export class MailService {
         template: params.template,
         context: params.context,
       };
-      const response = await this.mailerService.sendMail(sendMailParams);
+      // add a safety timeout to avoid long hangs
+      const response = await Promise.race([
+        this.mailerService.sendMail(sendMailParams),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP timeout')), 10000))
+      ]);
       this.logger.log(
         `Email sent successfully to recipients with the following parameters : ${JSON.stringify(
           sendMailParams,

@@ -15,7 +15,8 @@ export class LessonService {
     private readonly cloudinaryService: CloudinaryService,
     private readonly prisma: PrismaService
   ) { }
-  async create(file: Express.Multer.File, CreateLessonDto: CreateLessonDto, subjectId: number, groupId: number, userId: number): Promise<Lesson> {
+  
+  async create(file: Express.Multer.File, CreateLessonDto: CreateLessonDto, subjectId: number, groupIds: number[], userId: number): Promise<Lesson> {
 
     if (!subjectId) {
       throw new BadRequestException('subjectId is required');
@@ -23,6 +24,10 @@ export class LessonService {
     if (!file) {
       throw new BadRequestException('File is required');
     }
+    if (!groupIds || groupIds.length === 0) {
+      throw new BadRequestException('At least one groupId is required');
+    }
+    
     let subject = await this.prisma.subject.findUnique({
       where: {
         id: subjectId,
@@ -30,29 +35,24 @@ export class LessonService {
       }
     });
     if (!subject) {
-      throw new BadRequestException('Subject not found');
+      throw new BadRequestException('Subject not found or not owned by teacher');
     }
-    let group = await this.prisma.group.findUnique({
+    
+    // Verify all groups exist
+    let groups = await this.prisma.group.findMany({
       where: {
-        id: groupId
+        id: { in: groupIds }
       }
     });
-    if (!group) throw new BadRequestException("Group not found");
+    if (groups.length !== groupIds.length) {
+      throw new BadRequestException("One or more groups not found");
+    }
 
-
-    const result: UploadApiResponse = await this.cloudinaryService.uploadFile(file).catch((err) => {
+    const {secure_url , downloadUrl ,public_id} = await this.cloudinaryService.uploadFile(file).catch((err) => {
       console.log(err);
       throw new BadRequestException('Error uploading file');
     });
 
-    // await unlink(file.path , (err) => {
-    //   console.log(file.path);
-    //   if (err) {
-    //     console.error('Error deleting file:', err);
-    //   } else {
-    //     console.log('File deleted successfully');
-    //   }
-    // });
     let type: string;
     switch (file.mimetype) {
       case 'video/mp4':
@@ -67,16 +67,38 @@ export class LessonService {
 
     let lesson = await this.prisma.lesson.create({
       data: {
+        createdById: userId,
         title: CreateLessonDto.title,
-        url: result.secure_url,
+        description : CreateLessonDto.description,
+        url:  file.mimetype === 'application/pdf' ? downloadUrl : secure_url,
         type: type,
         subjectId: subjectId,
-        publicId: result.public_id,
-        groupId: groupId
+        publicId: public_id,
 
       }
     });
-    return lesson;
+
+    // Create lesson-group relationships
+    await this.prisma.lessonGroup.createMany({
+      data: groupIds.map(groupId => ({
+        lessonId: lesson.id,
+        groupId: groupId
+      }))
+    });
+
+    // Return lesson with groups
+    let lessonWithGroups = await this.prisma.lesson.findUnique({
+      where: { id: lesson.id },
+      include: {
+        groups: {
+          include: {
+            group: true
+          }
+        }
+      }
+    });
+
+    return lessonWithGroups!;
   }
 
   async findAllForSubject(subjectId: number): Promise<IMaterial[]> {
@@ -91,8 +113,16 @@ export class LessonService {
             title: true,
             description: true,
             teacher: { select: { name: true, email: true, id: true } }
-
-
+          }
+        },
+        groups: {
+          include: {
+            group: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
           }
         }
       }
@@ -110,7 +140,10 @@ export class LessonService {
         name: lesson.subject.teacher.name,
         email: lesson.subject.teacher.email,
       },
-      groupId: lesson.groupId.toString()
+      groups: lesson.groups.map(lg => ({
+        id: lg.group.id.toString(),
+        name: lg.group.name
+      }))
     }));
   }
 
@@ -126,6 +159,16 @@ export class LessonService {
             description: true,
             teacher: { select: { name: true, email: true, id: true } }
           }
+        },
+        groups: {
+          include: {
+            group: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
         }
       }
     });
@@ -134,19 +177,21 @@ export class LessonService {
     }
     return {
       id: lesson.id.toString(),
-      name: lesson.subject.title,
+      name: lesson.title,
       fileUrl: lesson.url,
       type: lesson.type,
-      groupId: lesson.groupId.toString(),
       subjectId: lesson.subjectId.toString(),
-      description: lesson.title,
+      description: lesson.description,
       createdAt: lesson.createdAt,
       createdBy: {
         id: lesson.subject.teacher.id.toString(),
         name: lesson.subject.teacher.name,
         email: lesson.subject.teacher.email,
-
-      }
+      },
+      groups: lesson.groups.map(lg => ({
+        id: lg.group.id.toString(),
+        name: lg.group.name
+      }))
     };
   }
 
@@ -157,16 +202,23 @@ export class LessonService {
         subject: {
           teacherId: teacherId
         },
-
-
       },
-
       include: {
         subject: {
           select: {
             title: true,
             description: true,
             teacher: { select: { name: true, email: true, id: true } }
+          }
+        },
+        groups: {
+          include: {
+            group: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
           }
         }
       }
@@ -176,18 +228,21 @@ export class LessonService {
     }
     return lessons.map((lesson) => ({
       id: lesson.id.toString(),
-      name: lesson.subject.title,
+      name: lesson.title,
       fileUrl: lesson.url,
       type: lesson.type,
       subjectId: lesson.subjectId.toString(),
-      description: lesson.title,
+      description: lesson.description,
       createdAt: lesson.createdAt,
       createdBy: {
         id: lesson.subject.teacher.id.toString(),
         name: lesson.subject.teacher.name,
         email: lesson.subject.teacher.email,
       },
-      groupId: lesson.groupId.toString()
+      groups: lesson.groups.map(lg => ({
+        id: lg.group.id.toString(),
+        name: lg.group.name
+      }))
     }));
   }
 
@@ -211,5 +266,243 @@ export class LessonService {
     });
     this.cloudinaryService.deleteFile(lesson.publicId);
     return { message: 'Lesson deleted successfully' };
+  }
+
+  async addLessonToAnyGroup(file: Express.Multer.File, CreateLessonDto: CreateLessonDto, subjectId: number, groupIds: number[], userId: number): Promise<Lesson> {
+    if (!subjectId) {
+      throw new BadRequestException('subjectId is required');
+    }
+    if (!file) {
+      throw new BadRequestException('File is required');
+    }
+    if (!groupIds || groupIds.length === 0) {
+      throw new BadRequestException('At least one groupId is required');
+    }
+    
+    // Check if the teacher owns the subject
+    let subject = await this.prisma.subject.findUnique({
+      where: {
+        id: subjectId,
+        teacherId: userId
+      }
+    });
+    if (!subject) {
+      throw new BadRequestException('Subject not found or you do not have permission to add lessons to this subject');
+    }
+    
+    // Verify all groups exist
+    let groups = await this.prisma.group.findMany({
+      where: {
+        id: { in: groupIds }
+      }
+    });
+    if (groups.length !== groupIds.length) {
+      throw new BadRequestException("One or more groups not found");
+    }
+
+    const result: UploadApiResponse = await this.cloudinaryService.uploadFile(file).catch((err) => {
+      console.log(err);
+      throw new BadRequestException('Error uploading file');
+    });
+
+    let type: string;
+    switch (file.mimetype) {
+      case 'video/mp4':
+        type = matrialType.video as string;
+        break;
+      case 'application/pdf':
+        type = matrialType.pdf as string;
+        break;
+      default:
+        type = matrialType.document as string;
+    }
+
+    let lesson = await this.prisma.lesson.create({
+      data: {
+        createdById: userId,
+        description: CreateLessonDto.description,
+        title: CreateLessonDto.title,
+        url: result.secure_url,
+        type: type,
+        subjectId: subjectId,
+        publicId: result.public_id
+      }
+    });
+
+    // Create lesson-group relationships
+    await this.prisma.lessonGroup.createMany({
+      data: groupIds.map(groupId => ({
+        lessonId: lesson.id,
+        groupId: groupId
+      }))
+    });
+
+    // Return lesson with groups
+    let   lessonWithGroups = await this.prisma.lesson.findUnique({
+      where: { id: lesson.id },
+      include: {
+        groups: {
+          include: {
+            group: true
+          }
+        }
+      }
+    });
+
+    return lessonWithGroups!;
+  }
+
+  async getLessonsForGroup(groupId: number): Promise<IMaterial[]> {
+    let lessons = await this.prisma.lesson.findMany({
+      where: {
+        groups: {
+          some: {
+            groupId: groupId
+          }
+        }
+      },
+      include: {
+        subject: {
+          select: {
+            title: true,
+            description: true,
+            teacher: { select: { name: true, email: true, id: true } }
+          }
+        },
+        groups: {
+          include: {
+            group: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        }
+      }
+    });
+    return lessons.map((lesson) => ({
+      id: lesson.id.toString(),
+      name: lesson.title,
+      fileUrl: lesson.url,
+      type: lesson.type,
+      subjectId: lesson.subjectId.toString(),
+      description: lesson.description,
+      createdAt: lesson.createdAt,
+      createdBy: {
+        id: lesson.subject.teacher.id.toString(),
+        name: lesson.subject.teacher.name,
+        email: lesson.subject.teacher.email,
+      },
+      groups: lesson.groups.map(lg => ({
+        id: lg.group.id.toString(),
+        name: lg.group.name
+      }))
+    }));
+  }
+
+  async addLessonToGroups(lessonId: number, groupIds: number[], userId: number): Promise<Lesson> {
+    // Check if lesson exists and user owns the subject
+    let lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      include: {
+        subject: true
+      }
+    });
+    
+    if (!lesson) {
+      throw new BadRequestException('Lesson not found');
+    }
+    
+    if (lesson.subject.teacherId !== userId) {
+      throw new BadRequestException('You do not have permission to modify this lesson');
+    }
+    
+    // Verify all groups exist
+    let groups = await this.prisma.group.findMany({
+      where: {
+        id: { in: groupIds }
+      }
+    });
+    if (groups.length !== groupIds.length) {
+      throw new BadRequestException("One or more groups not found");
+    }
+    
+    // Check which groups the lesson is not already assigned to
+    let existingGroups = await this.prisma.lessonGroup.findMany({
+      where: {
+        lessonId: lessonId,
+        groupId: { in: groupIds }
+      }
+    });
+    
+    let existingGroupIds = existingGroups.map(eg => eg.groupId);
+    let newGroupIds = groupIds.filter(gId => !existingGroupIds.includes(gId));
+    
+    if (newGroupIds.length === 0) {
+      throw new BadRequestException('Lesson is already assigned to all specified groups');
+    }
+    
+    // Add lesson to new groups
+    await this.prisma.lessonGroup.createMany({
+      data: newGroupIds.map(groupId => ({
+        lessonId: lessonId,
+        groupId: groupId
+      }))
+    });
+    
+    // Return updated lesson
+    let lessonWithGroups = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      include: {
+        groups: {
+          include: {
+            group: true
+          }
+        }
+      }
+    });
+    
+    return lessonWithGroups!;
+  }
+
+  async removeLessonFromGroups(lessonId: number, groupIds: number[], userId: number): Promise<Lesson> {
+    // Check if lesson exists and user owns the subject
+    let lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      include: {
+        subject: true
+      }
+    });
+    
+    if (!lesson) {
+      throw new BadRequestException('Lesson not found');
+    }
+    
+    if (lesson.subject.teacherId !== userId) {
+      throw new BadRequestException('You do not have permission to modify this lesson');
+    }
+    
+    // Remove lesson from specified groups
+    await this.prisma.lessonGroup.deleteMany({
+      where: {
+        lessonId: lessonId,
+        groupId: { in: groupIds }
+      }
+    });
+    
+    // Return updated lesson
+    let lessonWithGroups = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      include: {
+        groups: {
+          include: {
+            group: true
+          }
+        }
+      }
+    });
+    
+    return lessonWithGroups!;
   }
 }
