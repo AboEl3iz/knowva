@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, BadRequestException, Logger, ForbiddenException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, BadRequestException, Logger, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import { CreateQuizDto } from './dto/create-quiz.dto';
 import { UpdateQuizDto } from './dto/update-quiz.dto';
@@ -260,45 +260,129 @@ export class QuizService {
         let response;
         try {
             response = await axios.post(
-                "https://8000-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/generate_quiz",
+                "https://8080-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/generate_quiz/",
                 {
-                    "language": quiz.language,
-                    "level": generateAIQuestionsDto.difficulty,
-                    "pdf_path": generateAIQuestionsDto.filePath,
-                    "n_focus": generateAIQuestionsDto.noOfFocusQuestions,
-                    "n_remain": generateAIQuestionsDto.noOfRemainQuestions,
-                    "focus_pages": generateAIQuestionsDto.startingFocusPage > generateAIQuestionsDto.endingFocusPage ? [] : Array.from({ length: generateAIQuestionsDto.endingFocusPage - generateAIQuestionsDto.startingFocusPage + 1 }, (_, index) => index + generateAIQuestionsDto.startingFocusPage),
-                    "remain_pages": generateAIQuestionsDto.noOfRemainQuestions ? generateAIQuestionsDto.startingRemainPage! > generateAIQuestionsDto.endingRemainPage! ? [] : Array.from({ length: generateAIQuestionsDto.endingRemainPage! - generateAIQuestionsDto.startingRemainPage! + 1 }, (_, index) => index + generateAIQuestionsDto.startingRemainPage!) : [],
-                    "f_mcq_ratio": generateAIQuestionsDto.mcqFocusRatio,
-                    "f_tf_ratio": generateAIQuestionsDto.tfFocusRatio,
-                    "f_written_ratio": generateAIQuestionsDto.writtenFocusRatio,
-                    "r_mcq_ratio": generateAIQuestionsDto.noOfRemainQuestions ? generateAIQuestionsDto.mcqRemainRatio : null,
-                    "r_tf_ratio": generateAIQuestionsDto.noOfRemainQuestions ? generateAIQuestionsDto.tfRemainRatio : null,
-                    "r_written_ratio": generateAIQuestionsDto.noOfRemainQuestions ? generateAIQuestionsDto.writtenRemainRatio : null
-                });
+                    language: quiz.language,
+                    level: generateAIQuestionsDto.difficulty,
+                    pdf_path: generateAIQuestionsDto.filePath,
+                    n_questions: generateAIQuestionsDto.noOfFocusQuestions + (generateAIQuestionsDto.noOfRemainQuestions ?? 0),
+                    f_mcq_ratio: generateAIQuestionsDto.mcqFocusRatio! / 100,
+                    f_tf_ratio: generateAIQuestionsDto.tfFocusRatio! / 100,
+                    f_written_ratio: generateAIQuestionsDto.writtenFocusRatio! / 100,
+                    r_mcq_ratio: generateAIQuestionsDto.mcqRemainRatio ? generateAIQuestionsDto.mcqRemainRatio / 100 : null,
+                    r_tf_ratio: generateAIQuestionsDto.tfRemainRatio ? generateAIQuestionsDto.tfRemainRatio / 100 : null,
+                    r_written_ratio: generateAIQuestionsDto.writtenRemainRatio ? generateAIQuestionsDto.writtenRemainRatio / 100 : null,
+                }
+
+            );
         } catch (error) {
             throw new ForbiddenException('Failed to generate AI questions: ' + (error?.response?.data?.message || error.message));
         }
+        Logger.debug(response.data);
 
-        const dtos = response.data.questions;
+        const dtos = response.data;
 
         for (const questionDto of dtos) {
-            const errors = await validate(CreateQuestionDto, questionDto);
-            if (errors.length > 0) {
-                throw new BadRequestException('Invalid question data');
-            }
+            // const errors = await validate(CreateQuestionDto, questionDto);
+            // if (errors.length > 0) {
+            //     throw new BadRequestException('Invalid question data');
+            // }
             this.validateQuestionOptions(questionDto);
         }
 
-        await this.prisma.question.createMany({
-            data: dtos.map((questionDto) => ({
-                ...questionDto,
-                createdById: userId,
-                quizId,
-                mode: QuestionMode.AI
-            }))
+        //put score for every type
+        for (const questionDto of dtos) {
+            if (questionDto.type === QuestionType.MCQ) {
+                questionDto.score = 1;
+            } else if (questionDto.type === QuestionType.TrueFalse) {
+                questionDto.score = 2;
+            } else if (questionDto.type === QuestionType.Written) {
+                questionDto.score = 3;
+            }
+        }
+
+
+        let result = await this.prisma.question.createMany({
+
+            data: dtos.map((questionDto) => (
+
+                {
+                    ...questionDto,
+                    createdById: userId,
+                    quizId,
+
+                    mode: QuestionMode.AI
+                }))
         });
+
+        return {
+            message: `Successfully added ${result.count} questions to the quiz.`,
+            addedQuestions: result.count,
+        };
     }
+
+    async correctQuiz(userId: number, quizId: number) {
+        const attempt = await this.prisma.quizAttempt.findFirst({
+            where: {
+                quizId,
+                studentId: userId,
+            },
+            include: {
+                quiz: {
+                    include: {
+                        questions: {
+                            include: {
+                                question: true
+                            }
+                        }, // الأسئلة الخاصة بالـ Quiz
+                    },
+                },
+                studentAnswers: {
+                    include: {
+                        question: true, // عشان تجيب السؤال مع الإجابة
+                    },
+                },
+            },
+        });
+
+        if (!attempt) {
+            throw new NotFoundException('No attempt found for this student and quiz');
+        }
+
+        // نجهز الـ payload
+        const payload = {
+            max_grade: attempt.quiz.questions.reduce((sum, question) => sum + question.question.score, 0),
+            questions: attempt.studentAnswers.map((ans) => ({
+                question_id: ans.questionId.toString(),
+                student_id: attempt.studentId.toString(),
+                group_id: attempt.quiz.groupId.toString(),
+                exam_id: attempt.quizId.toString(),
+                question_text: ans.question.question,
+                correct_answer: ans.question.answer,
+                student_answer: ans.answer,
+                score: ans.score,
+            })),
+        };
+
+        let response;
+        try {
+            response = await axios.post(
+                "https://8080-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/correct_quiz/",
+                payload,
+            );
+        } catch (error) {
+            throw new ForbiddenException(
+                'Failed to correct quiz: ' + (error?.response?.data?.message || error.message),
+            );
+        }
+
+        return {
+            message: `Successfully corrected quiz ${quizId}.`,
+            aiResult: response.data,
+        };
+    }
+
+
 
     async saveAiQuestions(userId: number, quizId: number, questions: CreateQuestionDto[]) {
         const quiz = await this.prisma.quiz.findUnique({ where: { id: quizId, createdById: userId } });

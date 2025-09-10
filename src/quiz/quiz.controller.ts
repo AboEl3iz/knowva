@@ -173,9 +173,9 @@ export class QuizController {
         @Body() createQuestionDtos: CreateQuestionDto[],
         @Request() req
     ) {
-        const questionsToProcess = Array.isArray(createQuestionDtos) 
-        ? createQuestionDtos 
-        : [createQuestionDtos];
+        const questionsToProcess = Array.isArray(createQuestionDtos)
+            ? createQuestionDtos
+            : [createQuestionDtos];
         return await this.quizService.addManualQuestionsToQuiz(req.user.id, quizId, questionsToProcess);
     }
 
@@ -374,7 +374,7 @@ export class QuizController {
     @ApiOperation({ summary: 'Complete a quiz attempt' })
     @ApiParam({ name: 'quizAttemptId', description: 'Quiz Attempt ID' })
     @ApiResponse({ status: 200, description: 'Quiz attempt completed successfully' })
-     @ApiResponse({ status: 404, description: 'Quiz attempt not found' })
+    @ApiResponse({ status: 404, description: 'Quiz attempt not found' })
 
     /**
      * Completes a quiz attempt for the authenticated student
@@ -480,4 +480,15 @@ export class QuizController {
     async updateQuizStatus(@Param('id', ParseIntPipe) id: number, @Body() updateQuizDto: { status: 'DRAFT' | 'PUBLIC' }, @Request() req) {
         return await this.quizService.updateQuizStatus(id, req.user.id, updateQuizDto.status);
     }
+
+
+    @Get(':quizId/correct')
+    @Roles(Role.TEACHER)
+    async correctQuiz(
+        @Req() req: any,
+        @Param('quizId', ParseIntPipe) quizId: number,
+    ) {
+        return this.quizService.correctQuiz(+req.user.id, quizId);
+    }
+
 }
