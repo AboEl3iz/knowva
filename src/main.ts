@@ -13,20 +13,33 @@ async function bootstrap() {
   app.setGlobalPrefix('api/v1');
   //swagger
   const config = new DocumentBuilder()
-    .setTitle('API')
-    .setDescription('The API description')
+    .setTitle('API Documentation')
+    .setDescription('The API documentation for your application.')
     .setVersion('1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'Enter your JWT token here.',
+        in: 'header',
+      },
+      'access-token', // This is the unique name for the security scheme
+    )
+    .addTag('Auth') // Example tag for your authentication endpoints
+    .addTag('Users') // Example tag for user-related endpoints
     .build();
+
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
-  
+
 
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
     forbidNonWhitelisted: true,
     transform: true,
   }));
-  
+
   await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
 }
 bootstrap();
