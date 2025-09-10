@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { CreateAuthDto } from './dto/create-auth.dto';
 import { UpdateAuthDto } from './dto/update-auth.dto';
 import { PrismaService } from 'src/database/prisma.service';
@@ -268,9 +268,10 @@ export class AuthService {
   }
 
   if (file) {
-    const { secure_url} = await this.cloudinaryService.uploadFile(file, 'usersAvatars');
-    if (secure_url) {
-      updatedData.avatar = secure_url;
+    const result   = await this.cloudinaryService.uploadProfileImage(file);
+    if (result) {
+      Logger.log(result);
+      updatedData.avatar = result.secure_url;
     }
   }
 
