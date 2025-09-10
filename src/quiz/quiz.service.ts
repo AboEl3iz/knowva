@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, BadRequestException, Logger, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import { CreateQuizDto } from './dto/create-quiz.dto';
 import { UpdateQuizDto } from './dto/update-quiz.dto';
@@ -254,7 +254,7 @@ export class QuizService {
         const quiz = await this.prisma.quiz.findUnique({ where: { id: quizId, createdById: userId } });
 
         if (!quiz) {
-            throw new InternalServerErrorException('Quiz not found');
+            throw new BadRequestException('Quiz not found');
         }
 
         let response;
@@ -277,7 +277,7 @@ export class QuizService {
                     "r_written_ratio": generateAIQuestionsDto.noOfRemainQuestions ? generateAIQuestionsDto.writtenRemainRatio : null
                 });
         } catch (error) {
-            throw new InternalServerErrorException('Failed to generate AI questions: ' + (error?.response?.data?.message || error.message));
+            throw new ForbiddenException('Failed to generate AI questions: ' + (error?.response?.data?.message || error.message));
         }
 
         const dtos = response.data.questions;
@@ -285,7 +285,7 @@ export class QuizService {
         for (const questionDto of dtos) {
             const errors = await validate(CreateQuestionDto, questionDto);
             if (errors.length > 0) {
-                throw new InternalServerErrorException('Invalid question data');
+                throw new BadRequestException('Invalid question data');
             }
             this.validateQuestionOptions(questionDto);
         }

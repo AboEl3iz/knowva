@@ -467,4 +467,17 @@ export class QuizController {
     ) {
         return await this.quizService.requestFeedbackTeacher(req.user.id, studentId);
     }
+
+
+    //update status quiz
+    @Put(':id/status')
+    @Roles(Role.TEACHER)
+    @ApiOperation({ summary: 'Update quiz status' })
+    @ApiParam({ name: 'id', description: 'Quiz ID' })
+    // @ApiBody({ type:  UpdateQuizDto  })
+    @ApiResponse({ status: 200, description: 'Quiz status updated successfully' })
+    @ApiResponse({ status: 404, description: 'Quiz not found' })
+    async updateQuizStatus(@Param('id', ParseIntPipe) id: number, @Body() updateQuizDto: { status: 'DRAFT' | 'PUBLIC' }, @Request() req) {
+        return await this.quizService.updateQuizStatus(id, req.user.id, updateQuizDto.status);
+    }
 }

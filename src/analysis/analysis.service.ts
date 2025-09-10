@@ -367,15 +367,15 @@ export class AnalysisService {
      */
 
     const ongingQuizzesCount = await this.prisma.quiz.count({
-      where: { createdById: teacherId, startsAt: { lte: new Date() }, endsAt: { gte: new Date() } },
+      where: { createdById: teacherId, startsAt: { lte: new Date() }, endsAt: { gte: new Date() ,  } , status: 'PUBLIC' },
     });
 
     const endedQuizzesCount = await this.prisma.quiz.count({
-      where: { createdById: teacherId, endsAt: { lte: new Date() } },
+      where: { createdById: teacherId, endsAt: { lte: new Date() ,} , status: 'PUBLIC' },
     });
 
     const upcomingQuizzesCount = await this.prisma.quiz.count({
-      where: { createdById: teacherId, startsAt: { gt: new Date() } },
+      where: { createdById: teacherId, startsAt: { gt: new Date() } , status: 'PUBLIC' },
     });
 
     return {
