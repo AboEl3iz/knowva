@@ -268,9 +268,9 @@ export class AuthService {
   }
 
   if (file) {
-    const result = await this.cloudinaryService.uploadFile(file, 'usersAvatars');
-    if (result) {
-      updatedData.avatar = result.url;
+    const { secure_url} = await this.cloudinaryService.uploadFile(file, 'usersAvatars');
+    if (secure_url) {
+      updatedData.avatar = secure_url;
     }
   }
 
