@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 
 @Injectable()
@@ -200,7 +200,7 @@ export class AnalysisService {
       counts: {
         students: {
           total: studentsCount,
-          data: studentsWithAnalysis, // 👈 Use the new array with analysis
+          data: studentsWithAnalysis,
         },
         exams: examsCount,
         materials: materialsCount,
@@ -230,33 +230,65 @@ export class AnalysisService {
       }
     });
 
-    const totalStudents = quiz?.group.memberships.length ?? 0;
-    const participants = quiz?.attempts.length ?? 0;
+    if (!quiz) {
+      // Handle case where quiz is not found
+      throw new NotFoundException('Quiz not found');
+    }
+
+    const totalStudents = quiz.group.memberships.length ?? 0;
+    const participants = quiz.attempts.length ?? 0;
     const attendance = totalStudents > 0 ? Math.round((participants / totalStudents) * 100) : 0;
 
     // إجمالي درجات الكويز
-    const totalScore = quiz?.questions.reduce((sum, q) => sum + (q.question.score ?? 0), 0) ?? 0;
+    const totalScore = quiz.questions.reduce((sum, q) => sum + (q.question.score ?? 0), 0) ?? 0;
     const passScore = (totalScore * thresholdPercent) / 100;
 
     // درجات الطلاب (خام + نسبة مئوية)
-    const studentsScores = (quiz?.attempts ?? []).map(a => {
+    const studentsScores = (quiz.attempts ?? []).map(a => {
       const rawScore = a.score ?? 0;
       const percent = totalScore > 0 ? (rawScore / totalScore) * 100 : 0;
       return { studentId: a.studentId, score: rawScore, percent };
     });
 
-    // أصعب الأسئلة
-    const wrongCount: Record<number, number> = {};
-    for (const attempt of quiz?.attempts ?? []) {
-      for (const ans of attempt.studentAnswers as any[]) {
-        const isWrong = ans.question.type !== 'Written' && ans.answer !== ans.question.answer;
-        if (isWrong) wrongCount[ans.questionId] = (wrongCount[ans.questionId] ?? 0) + 1;
-      }
-    }
-    const hardestQuestions = Object.entries(wrongCount)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([questionId, count]) => ({ questionId: Number(questionId), wrongCount: count }));
+    /**
+     * اكتر السؤالات التي تم اجابتها بخطأ 
+     * نسبه الى حلوها صح 
+     * نسبه الى حلوها غلط
+     */
+    const questionAnalysis = quiz.questions.map(q => {
+      const totalAttempts = quiz.attempts.reduce((count, attempt) => {
+        // Check if this specific question was answered in this attempt
+        const hasAnswer = attempt.studentAnswers.some(ans => ans.questionId === q.questionId);
+        return count + (hasAnswer ? 1 : 0);
+      }, 0);
+
+      const successfulAttempts = quiz.attempts.reduce((count, attempt) => {
+        // Find the specific answer for this question
+        const answer = attempt.studentAnswers.find(ans => ans.questionId === q.questionId);
+        // A successful attempt is one where the score matches the question's max score.
+        const isSuccessful = answer && answer.score === q.question.score;
+        return count + (isSuccessful ? 1 : 0);
+      }, 0);
+
+      const failedAttempts = totalAttempts - successfulAttempts;
+
+      const successPercentage = totalAttempts > 0 ? Math.round((successfulAttempts / totalAttempts) * 100) : 0;
+      const failurePercentage = totalAttempts > 0 ? Math.round((failedAttempts / totalAttempts) * 100) : 0;
+
+      return {
+        questionId: q.questionId,
+        question: q.question.question,
+        successPercentage,
+        failurePercentage,
+        totalAttempts,
+        successfulAttempts,
+        failedAttempts,
+      };
+    });
+
+    const hardestQuestions = questionAnalysis
+      .sort((a, b) => b.failurePercentage - a.failurePercentage)
+      .slice(0, 10);
 
     // توزيع الدرجات بناءً على النسبة المئوية
     const distribution = [0, 0, 0, 0];
@@ -269,11 +301,11 @@ export class AnalysisService {
 
     // نسب النجاح
     const successParticipants = participants > 0
-      ? Math.round(((quiz?.attempts.filter(a => (a.score ?? 0) >= passScore).length ?? 0) / participants) * 100)
+      ? Math.round(((quiz.attempts.filter(a => (a.score ?? 0) >= passScore).length ?? 0) / participants) * 100)
       : 0;
 
     const successClassWide = totalStudents > 0
-      ? Math.round(((quiz?.attempts.filter(a => (a.score ?? 0) >= passScore).length ?? 0) / totalStudents) * 100)
+      ? Math.round(((quiz.attempts.filter(a => (a.score ?? 0) >= passScore).length ?? 0) / totalStudents) * 100)
       : 0;
 
     return {
@@ -311,11 +343,53 @@ export class AnalysisService {
       where: { createdById: teacherId },
     });
 
+    //عدد الاختبارات draft 
+    const draftsCount = await this.prisma.quiz.count({
+      where: { createdById: teacherId, status: 'DRAFT' },
+    });
+
+    //عدد الاختبارات public 
+    const publicsCount = await this.prisma.quiz.count({
+      where: { createdById: teacherId, status: 'PUBLIC' },
+    });
+
+    //اخر امتحان عمله
+    const lastQuiz = await this.prisma.quiz.findFirst({
+      where: { createdById: teacherId },
+      orderBy: { startsAt: 'desc' },
+    });
+
+    /**
+     * get the count of onging quizzes
+     * 
+     * get the count of ended quizzes
+     * get the cont of upcoming quizzes
+     */
+
+    const ongingQuizzesCount = await this.prisma.quiz.count({
+      where: { createdById: teacherId, startsAt: { lte: new Date() }, endsAt: { gte: new Date() } },
+    });
+
+    const endedQuizzesCount = await this.prisma.quiz.count({
+      where: { createdById: teacherId, endsAt: { lte: new Date() } },
+    });
+
+    const upcomingQuizzesCount = await this.prisma.quiz.count({
+      where: { createdById: teacherId, startsAt: { gt: new Date() } },
+    });
+
     return {
       students: studentsCount,
       materials: lessonsCount,
       classes: groupsCount,
       exams: quizzesCount,
+      drafts: draftsCount,
+      publics: publicsCount,
+      lastExam: lastQuiz,
+      ongingQuizzes: ongingQuizzesCount,
+      endedQuizzes: endedQuizzesCount,
+      upcomingQuizzes: upcomingQuizzesCount
+
     };
   }
 }
