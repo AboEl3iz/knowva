@@ -3,16 +3,15 @@ import { PrismaService } from 'src/database/prisma.service';
 import { CreateQuizDto } from './dto/create-quiz.dto';
 import { UpdateQuizDto } from './dto/update-quiz.dto';
 import { CreateQuestionDto } from './dto/create-question.dto';
-import { QuestionMode, QuestionType, NotificationType } from '@prisma/client';
+import { GenerateAIQuestionsDto } from './dto/generate-ai-questions.dto';
 import { UpdateQuestionDto } from './dto/update-question.dto';
 import { validate } from 'class-validator';
+import axios from 'axios';
+import { StudentFeedbackDto } from './dto/student-feedback.dto';
+import { QuestionAnswerDto } from './dto/question-answer.dto';
+import { QuestionMode, QuestionType, NotificationType } from '@prisma/client';
 import { NotificationService } from 'src/notification/notification.service';
 import { NotificationGateway } from 'src/notification/notification.gateway';
-import e from 'express';
-import axios from 'axios';
-import { plainToInstance } from 'class-transformer';
-import { Question } from 'generated/prisma';
-import { GenerateQuizDto } from './dto/create-question-ai.dto';
 @Injectable()
 export class QuizService {
     constructor(private prisma: PrismaService, private notifications: NotificationService,
@@ -72,7 +71,7 @@ export class QuizService {
         const isActive = new Date(createQuizDto.startsAt) <= new Date();
         const quiz = await this.prisma.quiz.create({ data: { ...createQuizDto, createdById: userId, isActive, status: 'DRAFT' as any } });
         // Do NOT notify students on draft creation
-        return quiz;
+        return quiz.id;
     }
 
     async updateQuiz(id: number, userId: number, updateQuizDto: UpdateQuizDto) {
@@ -174,11 +173,11 @@ export class QuizService {
     }
 
     async getQuestions(userId: number) {
-        return this.prisma.question.findMany({ where: { createdById: userId } });
+        return await this.prisma.question.findMany({ where: { createdById: userId } });
     }
 
     async getQuestion(id: number, userId: number) {
-        return this.prisma.question.findUnique({ where: { id, createdById: userId } });
+        return await this.prisma.question.findUnique({ where: { id, createdById: userId } });
     }
 
     async addOldQuestionToQuiz(userId: number, quizId: number, questionId: number) {
@@ -203,34 +202,76 @@ export class QuizService {
         }
     }
 
-    async addManualQuestionToQuiz(userId: number, quizId: number, questionDto: CreateQuestionDto) {
+    async addManualQuestionsToQuiz(userId: number, quizId: number, questionDtos: CreateQuestionDto[]) {
         const quiz = await this.prisma.quiz.findUnique({ where: { id: quizId, createdById: userId } });
         if (!quiz) throw new BadRequestException('Quiz not found');
-        this.validateQuestionOptions(questionDto);
-        const created = await (this.prisma as any).question.create({ data: { ...questionDto, createdById: userId, mode: QuestionMode.MANUAL } as any });
-        await (this.prisma as any).quizQuestion.create({ data: { quizId, questionId: created.id } });
-        return created;
-    }
-
-    async addAiQuestionsToQuiz(userId: number, quizId: number, noOfQuestions: number) {
-        const quiz = await this.prisma.quiz.findUnique({ where: { id: quizId, createdById: userId } });
-        if (!quiz) throw new BadRequestException('Quiz not found');
-        // TODO: fetch questions from proccess.env.KNOWVA_AI_API using axios asking for <noOfQuestions> Ai generated questions
-        // and the response should be { questions: CreateQuestionDto[] }
-        // validate each dto and its options then add them to the database
-        const questionDtos: CreateQuestionDto[] = [];
 
         for (const questionDto of questionDtos) {
             const errors = await validate(questionDto);
             if (errors.length > 0) {
                 throw new InternalServerErrorException('Invalid question data');
             }
-
             this.validateQuestionOptions(questionDto);
-            const created = await (this.prisma as any).question.create({ data: { ...questionDto, createdById: userId, mode: QuestionMode.AI } as any });
-            await (this.prisma as any).quizQuestion.create({ data: { quizId, questionId: created.id } });
         }
-        return { count: questionDtos.length };
+
+        return await this.prisma.question.createMany({
+            data: questionDtos.map((questionDto) => ({
+                ...questionDto,
+                createdById: userId,
+                quizId,
+                mode: QuestionMode.MANUAL
+            }))
+        });
+    }
+
+    async addAiQuestionsToQuiz(userId: number, quizId: number, generateAIQuestionsDto: GenerateAIQuestionsDto) {
+        const quiz = await this.prisma.quiz.findUnique({ where: { id: quizId, createdById: userId } });
+
+        if (!quiz) {
+            throw new InternalServerErrorException('Quiz not found');
+        }
+
+        let response;
+        try {
+            response = await axios.post(
+                "https://8000-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/generate_quiz",
+                {
+                    "language": quiz.language,
+                    "level": generateAIQuestionsDto.difficulty,
+                    "pdf_path": generateAIQuestionsDto.filePath,
+                    "n_focus": generateAIQuestionsDto.noOfFocusQuestions,
+                    "n_remain": generateAIQuestionsDto.noOfRemainQuestions,
+                    "focus_pages": generateAIQuestionsDto.startingFocusPage > generateAIQuestionsDto.endingFocusPage ? [] : Array.from({ length: generateAIQuestionsDto.endingFocusPage - generateAIQuestionsDto.startingFocusPage + 1 }, (_, index) => index + generateAIQuestionsDto.startingFocusPage),
+                    "remain_pages": generateAIQuestionsDto.noOfRemainQuestions ? generateAIQuestionsDto.startingRemainPage! > generateAIQuestionsDto.endingRemainPage! ? [] : Array.from({ length: generateAIQuestionsDto.endingRemainPage! - generateAIQuestionsDto.startingRemainPage! + 1 }, (_, index) => index + generateAIQuestionsDto.startingRemainPage!) : [],
+                    "f_mcq_ratio": generateAIQuestionsDto.mcqFocusRatio,
+                    "f_tf_ratio": generateAIQuestionsDto.tfFocusRatio,
+                    "f_written_ratio": generateAIQuestionsDto.writtenFocusRatio,
+                    "r_mcq_ratio": generateAIQuestionsDto.noOfRemainQuestions ? generateAIQuestionsDto.mcqRemainRatio : null,
+                    "r_tf_ratio": generateAIQuestionsDto.noOfRemainQuestions ? generateAIQuestionsDto.tfRemainRatio : null,
+                    "r_written_ratio": generateAIQuestionsDto.noOfRemainQuestions ? generateAIQuestionsDto.writtenRemainRatio : null
+                });
+        } catch (error) {
+            throw new InternalServerErrorException('Failed to generate AI questions: ' + (error?.response?.data?.message || error.message));
+        }
+
+        const dtos = response.data.questions;
+
+        for (const questionDto of dtos) {
+            const errors = await validate(CreateQuestionDto, questionDto);
+            if (errors.length > 0) {
+                throw new InternalServerErrorException('Invalid question data');
+            }
+            this.validateQuestionOptions(questionDto);
+        }
+
+        await this.prisma.question.createMany({
+            data: dtos.map((questionDto) => ({
+                ...questionDto,
+                createdById: userId,
+                quizId,
+                mode: QuestionMode.AI
+            }))
+        });
     }
 
     async saveAiQuestions(userId: number, quizId: number, questions: CreateQuestionDto[]) {
@@ -244,97 +285,97 @@ export class QuizService {
         return { count: questions.length };
     }
 
-    async generateAiQuestions(quizId: number, teacherId: number , generateQuizByAi: GenerateQuizDto) {
-        // request body for AI
-        const requestBody = {
-            // language: 'en',
-            // level: 'hard',
-            // pdf_path: 'data/The Machine Learning Pipeline.pdf',
-            // n_questions: 10,
-            // f_mcq_ratio: 0.6,
-            // f_tf_ratio: 0.2,
-            // f_written_ratio: 0.2,
-            // r_mcq_ratio: 0.6,
-            // r_tf_ratio: 0.2,
-            // r_written_ratio: 0.2,
-            ...generateQuizByAi
-        };
+    // async generateAiQuestions(quizId: number, teacherId: number , generateQuizByAi: GenerateQuizDto) {
+    //     // request body for AI
+    //     const requestBody = {
+    //         // language: 'en',
+    //         // level: 'hard',
+    //         // pdf_path: 'data/The Machine Learning Pipeline.pdf',
+    //         // n_questions: 10,
+    //         // f_mcq_ratio: 0.6,
+    //         // f_tf_ratio: 0.2,
+    //         // f_written_ratio: 0.2,
+    //         // r_mcq_ratio: 0.6,
+    //         // r_tf_ratio: 0.2,
+    //         // r_written_ratio: 0.2,
+    //         ...generateQuizByAi
+    //     };
 
-        // 1. Call AI
-        const { data } = await axios.post(
-            'https://8000-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/generate_quiz/',
-            requestBody,
-        );
+    //     // 1. Call AI
+    //     const { data } = await axios.post(
+    //         'https://8000-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/generate_quiz/',
+    //         requestBody,
+    //     );
 
-        if (!Array.isArray(data)) {
-            throw new BadRequestException('AI did not return a valid list of questions');
-        }
+    //     if (!Array.isArray(data)) {
+    //         throw new BadRequestException('AI did not return a valid list of questions');
+    //     }
 
-        type QuestionDTO = {
-            id: number;
-            text: string;
-            type: string;
-            options: string[];
-            answer: string;
-            quizId: number;
-        };
+    //     type QuestionDTO = {
+    //         id: number;
+    //         text: string;
+    //         type: string;
+    //         options: string[];
+    //         answer: string;
+    //         quizId: number;
+    //     };
 
-        let savedQuestions: QuestionDTO[] = [];
+    //     let savedQuestions: QuestionDTO[] = [];
 
-        // 2. Validate & Save
-        for (const q of data) {
-            if (!q.question || typeof q.question !== 'string') continue;
-            if (!q.type || !['MCQ', 'TrueFalse', 'Written'].includes(q.type)) continue;
-            if (!q.answer || typeof q.answer !== 'string') continue;
+    //     // 2. Validate & Save
+    //     for (const q of data) {
+    //         if (!q.question || typeof q.question !== 'string') continue;
+    //         if (!q.type || !['MCQ', 'TrueFalse', 'Written'].includes(q.type)) continue;
+    //         if (!q.answer || typeof q.answer !== 'string') continue;
 
-            // if (q.type === 'MCQ') {
-            //     if (!Array.isArray(q.options) || q.options.length < 2) continue;
-            //     if (!q.options.includes(q.answer)) continue;
-            // }
+    //         // if (q.type === 'MCQ') {
+    //         //     if (!Array.isArray(q.options) || q.options.length < 2) continue;
+    //         //     if (!q.options.includes(q.answer)) continue;
+    //         // }
 
-            // if (q.type === 'TrueFalse') {
-            //     if (!['True', 'False'].includes(q.answer)) continue;
-            // }
+    //         // if (q.type === 'TrueFalse') {
+    //         //     if (!['True', 'False'].includes(q.answer)) continue;
+    //         // }
 
-            // set default score if not present
-            const score = typeof q.score === 'number' && q.score > 0 ? q.score : 1;
+    //         // set default score if not present
+    //         const score = typeof q.score === 'number' && q.score > 0 ? q.score : 1;
 
-            // 3. Save question
-            const savedQuestion = await this.prisma.question.create({
-                data: {
-                    question: q.question,
-                    type: q.type as QuestionType,
-                    options: q.options ?? [],
-                    answer: q.answer,
-                    score,
-                    mode: QuestionMode.AI,
-                    createdById: teacherId,
-                },
-            });
+    //         // 3. Save question
+    //         const savedQuestion = await this.prisma.question.create({
+    //             data: {
+    //                 question: q.question,
+    //                 type: q.type as QuestionType,
+    //                 options: q.options ?? [],
+    //                 answer: q.answer,
+    //                 score,
+    //                 mode: QuestionMode.AI,
+    //                 createdById: teacherId,
+    //             },
+    //         });
 
-            // 4. Link with quiz
-            await this.prisma.quizQuestion.create({
-                data: {
-                    quizId,
-                    questionId: savedQuestion.id,
-                },
-            });
+    //         // 4. Link with quiz
+    //         await this.prisma.quizQuestion.create({
+    //             data: {
+    //                 quizId,
+    //                 questionId: savedQuestion.id,
+    //             },
+    //         });
 
-            savedQuestions.push({
-                id: savedQuestion.id,
-                text: savedQuestion.question,
-                type: savedQuestion.type,
-                options: savedQuestion.options,
-                answer: savedQuestion.answer,
-                quizId,
-            });
-        }
+    //         savedQuestions.push({
+    //             id: savedQuestion.id,
+    //             text: savedQuestion.question,
+    //             type: savedQuestion.type,
+    //             options: savedQuestion.options,
+    //             answer: savedQuestion.answer,
+    //             quizId,
+    //         });
+    //     }
 
-        return {
-            message: `Saved ${savedQuestions.length} valid questions`,
-            questions: savedQuestions,
-        };
-    }
+    //     return {
+    //         message: `Saved ${savedQuestions.length} valid questions`,
+    //         questions: savedQuestions,
+    //     };
+    // }
 
 
     async duplicateQuestion(userId: number, questionId: number) {
@@ -356,7 +397,7 @@ export class QuizService {
     async updateQuestion(userId: number, questionId: number, questionDto: UpdateQuestionDto) {
         this.validateQuestionOptions(questionDto);
 
-        return this.prisma.question.update({ where: { id: questionId, createdById: userId }, data: questionDto });
+        return await this.prisma.question.update({ where: { id: questionId, createdById: userId }, data: questionDto });
     }
 
     async removeQuestionFromQuiz(userId: number, questionId: number, quizId: number) {
@@ -364,9 +405,9 @@ export class QuizService {
         if (!quiz) throw new BadRequestException('Quiz not found');
         const question = await this.prisma.question.findUnique({ where: { id: questionId, createdById: userId } });
         if (!question) throw new BadRequestException('Question not found');
-        const link = await (this.prisma as any).quizQuestion.findFirst({ where: { quizId, questionId } });
+        const link = await this.prisma.quizQuestion.findFirst({ where: { quizId, questionId } });
         if (!link) throw new BadRequestException('Question is not linked to this quiz');
-        await (this.prisma as any).quizQuestion.delete({ where: { id: link.id } });
+        await this.prisma.quizQuestion.delete({ where: { id: link.id } });
         return { message: 'Question removed successfully' };
     }
 
@@ -397,65 +438,221 @@ export class QuizService {
         if (quiz.startsAt > new Date() || quiz.endsAt <= new Date()) {
             throw new BadRequestException('Quiz is not available');
         }
-        const attempt = await this.prisma.quizAttempt.create({ data: { quizId, studentId: userId } });
+        const attempt = await this.prisma.quizAttempt.create({ data: { quizId, studentId: userId, startedAt: new Date() } });
         await this.notifications.create(quiz.createdById, `Student ${userId} started quiz: ${quiz.title}`, NotificationType.QUIZ_ASSIGNED);
         this.notificationGateway.sendNotification(quiz.createdById.toString(), `Student ${userId} started quiz: ${quiz.title}`);
         return attempt;
     }
 
-    async addQuestionAnswer(quizAttemptId: number, questionId: number, answer: string) {
+    async addQuestionsAnswer(quizAttemptId: number, questionAnswerDtos: QuestionAnswerDto[]) {
         const attempt = await this.prisma.quizAttempt.findUnique({
             where: { id: quizAttemptId },
             include: { quiz: true },
         });
         if (!attempt) throw new BadRequestException('Attempt not found');
 
-        const question = await this.prisma.question.findUnique({ where: { id: questionId } });
-        if (!question) throw new BadRequestException('Question not found');
 
         // check if student already answered
-        let studentAnswer = await this.prisma.studentAnswer.findUnique({
-            where: {
-                quizAttemptId_questionId: { quizAttemptId, questionId },
-            },
-        });
-
-        if (studentAnswer) {
-            // If answer exists
-            if (attempt.quiz.canChangeAnswer) {
-                studentAnswer = await this.prisma.studentAnswer.update({
-                    where: { id: studentAnswer.id },
-                    data: { answer },
-                });
-            } else {
-                throw new BadRequestException('Answer cannot be changed');
+        for (const questionAnswerDto of questionAnswerDtos) {
+            const errors = await validate(questionAnswerDto);
+            if (errors.length > 0) {
+                throw new InternalServerErrorException('Invalid question answer data');
             }
-        } else {
-            // If no answer yet → create new one
-            studentAnswer = await this.prisma.studentAnswer.create({
-                data: { quizAttemptId, questionId, answer },
-            });
+            const question = await this.prisma.question.findUnique({ where: { id: questionAnswerDto.questionId } });
+            if (!question) throw new BadRequestException('Question not found');
         }
-
-        return studentAnswer;
+        return await this.prisma.questionAnswer.createMany({ data: questionAnswerDtos.map((questionAnswerDto) => ({ ...questionAnswerDto, quizAttemptId })) });
     }
 
-
-    async updateQuestionAnswer(quizAttemptId: number, questionId: number, answer: string) {
-        return this.prisma.studentAnswer.update({
-            where: {
-                quizAttemptId_questionId: {
-                    quizAttemptId,
-                    questionId,
+    async getQuizAttempt(quizAttemptId: number, userId: number) {
+        return await this.prisma.quizAttempt.findFirst({
+            where: { id: quizAttemptId, studentId: userId },
+            include: {
+                quiz: {
+                    include: { questions: true }
                 },
-                quizAttempt: {
-                    quiz: {
-                        canChangeAnswer: true,
-                        endsAt: { gt: new Date() }
+                studentAnswers: {
+                    include: { question: true }
+                }
+            }
+        });
+    }
+
+    async completeQuizAttempt(quizAttemptId: number, userId: number) {
+        const attempt = await this.prisma.quizAttempt.findFirst({
+            where: { id: quizAttemptId, studentId: userId },
+            include: {
+                studentAnswers: {
+                    include: { question: true }
+                }
+            }
+        });
+
+        if (!attempt) {
+            throw new InternalServerErrorException('Quiz attempt not found');
+        }
+
+        // Calculate total score
+        const totalScore = attempt.studentAnswers.reduce((sum, answer) => sum + answer.score, 0);
+        const maxScore = attempt.studentAnswers.reduce((sum, answer) => sum + answer.question.score, 0);
+
+        return await this.prisma.quizAttempt.update({
+            where: { id: quizAttemptId },
+            data: { score: totalScore, endedAt: new Date() }
+        });
+    }
+
+    async getAvailableQuizzes(userId: number) {
+        return await this.prisma.quiz.findMany({
+            where: {
+                isActive: true,
+                startsAt: { lte: new Date() },
+                endsAt: { gt: new Date() },
+                group: {
+                    memberships: {
+                        some: {
+                            studentId: userId,
+                            status: 'APPROVED'
+                        }
                     }
                 }
             },
-            data: { answer }
+            include: {
+                group: true,
+                subject: true
+            }
+        });
+    }
+
+
+
+    async requestFeedbackStudent(userId: number, quizId: number) {
+        const quiz = await this.prisma.quiz.findUnique({
+            where: { id: quizId, createdById: userId },
+            include: {
+                attempts: {
+                    include: {
+                        studentAnswers: {
+                            include: { question: true }
+                        }
+                    }
+                }
+            }
+        });
+        if (!quiz) {
+            throw new InternalServerErrorException('Quiz not found');
+        }
+
+        let response;
+        try {
+            response = await axios.post(
+                "https://8000-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/feedback_student",
+                quiz.attempts.map((attempt) => ({
+                    "attempt_id": attempt.id,
+                    "questions": attempt.studentAnswers.map((sa) => ({
+                        "answer_id": sa.id,
+                        "question": sa.question.question,
+                        "student_answer": sa.answer,
+                        "correct_answer": sa.question.answer,
+                        "type": sa.question.type,
+                        "options": sa.question.options,
+                        "q_weight": sa.question.score,
+                        "score": sa.score
+                    }))
+                }))
+            );
+        }
+        catch (error) {
+            throw new InternalServerErrorException(error.message);
+        }
+
+        const attempts = response.data;
+
+        for (const attempt of attempts) {
+            const dtos: StudentFeedbackDto[] = attempt.results.map((dto) => ({
+                answerId: dto.answer_id,
+                feedback: dto.feedback
+            }))
+
+            for (const dto of dtos) {
+                const errors = await validate(dto);
+                if (errors.length > 0) {
+                    throw new InternalServerErrorException('Invalid question data');
+                }
+                this.validateQuestionOptions(dto);
+            }
+        }
+
+        await this.prisma.questionFeedback.createMany({
+            data: attempts.flatMap((attempt) => attempt.results.map((result) => ({
+                answerId: result.answer_id,
+                feedback: result.feedback
+            })))
+        });
+    }
+
+    async getRequestedFeedbackTeacher(userId: number, studentId: number) {
+        return await this.prisma.studentFeedback.findMany({ where: { teacherId: userId, studentId } });
+    }
+
+    async requestFeedbackTeacher(userId: number, studentId: number) {
+        const student = await this.prisma.user.findUnique({
+            where: { id: studentId },
+            include: {
+                quizAttempts: {
+                    include: {
+                        studentAnswers: {
+                            include: { question: true }
+                        },
+                        feedback: true
+                    }
+                }
+            }
+        })
+
+        if (!student) {
+            throw new InternalServerErrorException('Student not found');
+        }
+
+        let response;
+        try {
+            response = await axios.post(
+                "https://8000-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/feedback_teacher",
+                {
+                    "student_id": studentId,
+                    "latest_score": student.quizAttempts[0].score,
+                    "summary": student.quizAttempts[0].feedback?.summary,
+                    "good_points": student.quizAttempts[0].feedback?.goodPoints,
+                    "weak_points": student.quizAttempts[0].feedback?.weakPoints,
+                    "history": student.quizAttempts.map((attempt) => ({
+                        "student_id": studentId,
+                        "score": attempt.score,
+                        "strong_points": attempt.feedback?.goodPoints,
+                        "weak_points": attempt.feedback?.weakPoints
+                    }))
+                }
+            );
+        } catch (error) {
+            throw new InternalServerErrorException('Failed to generate teacher feedback: ' + (error?.response?.data?.message || error.message));
+        }
+
+        const data = response.data;
+
+        return await this.prisma.studentFeedback.create({
+            data: {
+                studentId,
+                teacherId: userId,
+                progress: data.progress,
+                summaryFeedback: data.summary_feedback,
+                strongPoints: data.strong_points,
+                weakPoints: data.weak_points,
+                improvedPoints: data.improved_points,
+                declinedPoints: data.declined_points,
+                unchangedPoints: data.unchanged_points,
+                scoreTrend: data.score_trend,
+                riskLevel: data.risk_level,
+                teachingRecommendation: data.teaching_recommendation
+            }
         });
     }
 

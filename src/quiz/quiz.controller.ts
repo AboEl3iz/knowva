@@ -24,7 +24,8 @@ import { AuthenticationGuard } from '../guards/authentication.guard';
 import { AuthorizationGuard } from '../guards/authorization.guard';
 import { Roles } from '../decorator/decorator/roles.decorator';
 import { Role } from '../decorator/enums/roles';
-import { GenerateQuizDto } from './dto/create-question-ai.dto';
+import { GenerateAIQuestionsDto } from './dto/generate-ai-questions.dto';
+import { QuestionAnswerDto } from './dto/question-answer.dto';
 
 @ApiTags('Quiz')
 @Controller('quiz')
@@ -44,7 +45,7 @@ export class QuizController {
      * @returns A list of quiz objects
      */
     async getQuizzes(@Request() req) {
-        return this.quizService.getQuizes(req.user.id);
+        return await this.quizService.getQuizes(req.user.id);
     }
 
     @Get(':id')
@@ -61,7 +62,7 @@ export class QuizController {
      * @returns The quiz object
      */
     async getQuiz(@Param('id', ParseIntPipe) id: number, @Request() req) {
-        return this.quizService.getQuiz(id, req.user.id);
+        return await this.quizService.getQuiz(id, req.user.id);
     }
 
     @Post()
@@ -77,7 +78,7 @@ export class QuizController {
      * @returns The created quiz object
      */
     async createQuiz(@Body() createQuizDto: CreateQuizDto, @Request() req) {
-        return this.quizService.createQuiz(req.user.id, createQuizDto);
+        return await this.quizService.createQuiz(req.user.id, createQuizDto);
     }
 
     @Put(':id')
@@ -99,27 +100,7 @@ export class QuizController {
         @Body() updateQuizDto: UpdateQuizDto,
         @Request() req
     ) {
-        return this.quizService.updateQuiz(id, req.user.id, updateQuizDto);
-    }
-
-    @Put(':id/status')
-    @Roles(Role.TEACHER)
-    @ApiOperation({ summary: 'Update quiz status (DRAFT/PUBLIC)' })
-    @ApiParam({ name: 'id', description: 'Quiz ID' })
-    @ApiBody({ schema: { type: 'object', properties: { status: { enum: ['DRAFT', 'PUBLIC'] } }, required: ['status'] } })
-    /**
-     * Updates the status of a quiz for the authenticated teacher
-     *
-     * @param id The ID of the quiz to update
-     * @param body The updated status of the quiz (DRAFT/PUBLIC)
-     * @returns The updated quiz object
-     */
-    async updateQuizStatus(
-        @Param('id', ParseIntPipe) id: number,
-        @Body() body: { status: 'DRAFT' | 'PUBLIC' },
-        @Request() req
-    ) {
-        return this.quizService.updateQuizStatus(id, req.user.id, body.status);
+        return await this.quizService.updateQuiz(id, req.user.id, updateQuizDto);
     }
 
     @Post(':id/duplicate')
@@ -137,33 +118,7 @@ export class QuizController {
      * @returns The duplicated quiz object
      */
     async duplicateQuiz(@Param('id', ParseIntPipe) id: number, @Request() req) {
-        return this.quizService.duplicateQuiz(id, req.user.id);
-    }
-
-    @Get('list/drafts')
-    @Roles(Role.TEACHER)
-    @ApiOperation({ summary: 'Get draft quizzes' })
-
-    /**
-     * Retrieves all draft quizzes for the authenticated teacher
-     *
-     * @returns A list of draft quiz objects
-     */
-    async getDrafts(@Request() req) {
-        return this.quizService.getDraftQuizzes(req.user.id);
-    }
-
-    @Get('list/public')
-    @Roles(Role.TEACHER)
-    @ApiOperation({ summary: 'Get public quizzes' })
-
-    /**
-     * Retrieves all public quizzes for the authenticated teacher
-     *
-     * @returns A list of public quiz objects
-     */
-    async getPublic(@Request() req) {
-        return this.quizService.getPublicQuizzes(req.user.id);
+        return await this.quizService.duplicateQuiz(id, req.user.id);
     }
 
     // Question Management Endpoints
@@ -177,7 +132,7 @@ export class QuizController {
      * @returns List of questions
      */
     async getQuestions(@Request() req) {
-        return this.quizService.getQuestions(req.user.id);
+        return await this.quizService.getQuestions(req.user.id);
     }
 
     @Get('question/:id')
@@ -193,29 +148,25 @@ export class QuizController {
      * @returns The question object
      */
     async getQuestion(@Param('id', ParseIntPipe) id: number, @Request() req) {
-        return this.quizService.getQuestion(id, req.user.id);
+        return await this.quizService.getQuestion(id, req.user.id);
     }
 
     @Post(':quizId/questions')
     @Roles(Role.TEACHER)
     @ApiOperation({ summary: 'Add a manual question to a quiz' })
     @ApiParam({ name: 'quizId', description: 'Quiz ID' })
-    @ApiBody({ type: CreateQuestionDto })
-    @ApiResponse({ status: 201, description: 'Question added to quiz successfully' })
+    @ApiBody({
+        type: [CreateQuestionDto],
+        description: 'Array of questions to add to the quiz'
+    })
+    @ApiResponse({ status: 201, description: 'Questions added to quiz successfully' })
     @ApiResponse({ status: 400, description: 'Invalid input data' })
-    /**
-     * Adds a manual question to a quiz for the authenticated teacher
-     *
-     * @param quizId The ID of the quiz to add the question to
-     * @param createQuestionDto The question data to create
-     * @returns The created question
-     */
-    async addManualQuestionToQuiz(
+    async addManualQuestionsToQuiz(
         @Param('quizId', ParseIntPipe) quizId: number,
-        @Body() createQuestionDto: CreateQuestionDto,
+        @Body() createQuestionDtos: CreateQuestionDto[],
         @Request() req
     ) {
-        return this.quizService.addManualQuestionToQuiz(req.user.id, quizId, createQuestionDto);
+        return await this.quizService.addManualQuestionsToQuiz(req.user.id, quizId, createQuestionDtos);
     }
 
     @Post(':quizId/questions/:questionId')
@@ -245,18 +196,7 @@ export class QuizController {
     @Roles(Role.TEACHER)
     @ApiOperation({ summary: 'Add AI-generated questions to a quiz' })
     @ApiParam({ name: 'quizId', description: 'Quiz ID' })
-    @ApiBody({
-        schema: {
-            type: 'object',
-            properties: {
-                questions: {
-                    type: 'array',
-                    items: { $ref: '#/components/schemas/CreateQuestionDto' }
-                }
-            },
-            required: ['questions']
-        }
-    })
+    @ApiBody({ type: GenerateAIQuestionsDto, description: 'AI question generation parameters' })
     @ApiResponse({ status: 201, description: 'AI questions added to quiz successfully' })
     @ApiResponse({ status: 400, description: 'Invalid input data' })
     @ApiResponse({ status: 404, description: 'Quiz not found' })
@@ -269,10 +209,10 @@ export class QuizController {
      */
     async addAiQuestionsToQuiz(
         @Param('quizId', ParseIntPipe) quizId: number,
-        @Body() body: { noOfQuestions: number },
+        @Body() generateAIQuestionsDto: GenerateAIQuestionsDto,
         @Request() req
     ) {
-        return this.quizService.addAiQuestionsToQuiz(req.user.id, quizId, body.noOfQuestions);
+        return await this.quizService.addAiQuestionsToQuiz(req.user.id, quizId, generateAIQuestionsDto);
     }
 
     @Post('questions/:id/duplicate')
@@ -288,7 +228,7 @@ export class QuizController {
      * @returns The duplicated question
      */
     async duplicateQuestion(@Param('id', ParseIntPipe) id: number, @Request() req) {
-        return this.quizService.duplicateQuestion(req.user.id, id);
+        return await this.quizService.duplicateQuestion(req.user.id, id);
     }
 
     @Put('questions/:id')
@@ -310,23 +250,20 @@ export class QuizController {
         @Body() updateQuestionDto: UpdateQuestionDto,
         @Request() req
     ) {
-        return this.quizService.updateQuestion(req.user.id, id, updateQuestionDto);
+        return await this.quizService.updateQuestion(req.user.id, id, updateQuestionDto);
     }
 
-    @Delete('questions/:id/remove-from-quiz')
+    @Delete('questions/:questionId/:quizId/remove-from-quiz')
     @Roles(Role.TEACHER)
     @ApiOperation({ summary: 'Remove a question from its quiz' })
     @ApiParam({ name: 'id', description: 'Question ID' })
     @ApiResponse({ status: 200, description: 'Question removed from quiz successfully' })
     @ApiResponse({ status: 404, description: 'Question not found' })
-    /**
-     * Removes a question from its quiz for the authenticated teacher
-     *
-     * @param id The ID of the question to remove from its quiz
-     * @returns The removed question
-     */
-    async removeQuestionFromQuiz(@Param('id', ParseIntPipe) id: number, @Request() req, @Query('quizId') quizId: number) {
-        return this.quizService.removeQuestionFromQuiz(req.user.id, id, quizId);
+    async removeQuestionFromQuiz(
+        @Param('questionId', ParseIntPipe) questionId: number,
+        @Param('quizId', ParseIntPipe) quizId: number,
+        @Request() req) {
+        return await this.quizService.removeQuestionFromQuiz(req.user.id, questionId, quizId);
     }
 
     @Delete('questions/:id')
@@ -343,7 +280,7 @@ export class QuizController {
      * @returns The deleted question
      */
     async deleteQuestion(@Param('id', ParseIntPipe) id: number, @Request() req) {
-        return this.quizService.deleteQuestion(req.user.id, id);
+        return await this.quizService.deleteQuestion(req.user.id, id);
     }
 
     // Quiz Attempt Endpoints
@@ -359,7 +296,7 @@ export class QuizController {
      * @returns The quiz attempts
      */
     async getMyQuizAttempts(@Param('id', ParseIntPipe) id: number, @Request() req) {
-        return this.quizService.getMyQuizAttempts(req.user.id, id);
+        return await this.quizService.getMyQuizAttempts(req.user.id, id);
     }
 
     @Get(':id/attempts')
@@ -374,7 +311,7 @@ export class QuizController {
      * @returns The quiz attempts
      */
     async getQuizAttempts(@Param('id', ParseIntPipe) id: number, @Request() req) {
-        return this.quizService.getQuizAttempts(id, req.user.id);
+        return await this.quizService.getQuizAttempts(id, req.user.id);
     }
 
     @Post(':id/start')
@@ -390,120 +327,83 @@ export class QuizController {
      * @returns The started quiz attempt
      */
     async startQuizAttempt(@Param('id', ParseIntPipe) id: number, @Request() req) {
-        return this.quizService.startQuizAttempt(req.user.id, id);
-    }
-
-    @Post('attempts/:quizAttemptId/finish')
-    @Roles(Role.STUDENT)
-    @ApiOperation({ summary: 'Finish a quiz attempt and receive results' })
-    @ApiParam({ name: 'quizAttemptId', description: 'Quiz Attempt ID' })
-    @ApiResponse({ status: 200, description: 'Attempt finished and scored' })
-    /**
-     * Finishes a quiz attempt and receives the results for the authenticated student
-     *
-     * @param quizAttemptId The ID of the quiz attempt to finish
-     * @returns The finished quiz attempt and its results
-     */
-    async finishAttempt(
-        @Param('quizAttemptId', ParseIntPipe) quizAttemptId: number,
-        @Request() req
-    ) {
-        return this.quizService.finishQuizAttempt(req.user.id, quizAttemptId);
+        return await this.quizService.startQuizAttempt(req.user.id, id);
     }
 
     @Post('attempts/:quizAttemptId/answers')
     @Roles(Role.STUDENT)
     @ApiOperation({ summary: 'Add an answer to a quiz attempt' })
     @ApiParam({ name: 'quizAttemptId', description: 'Quiz Attempt ID' })
-    @ApiBody({
-        schema: {
-            type: 'object',
-            properties: {
-                questionId: { type: 'number' },
-                answer: { type: 'string' }
-            },
-            required: ['questionId', 'answer']
-        }
-    })
+    @ApiBody({ type: [QuestionAnswerDto] })
     @ApiResponse({ status: 201, description: 'Answer added successfully' })
     @ApiResponse({ status: 400, description: 'Invalid input data' })
-    /**
-     * Adds an answer to a quiz attempt for the authenticated student
-     *
-     * @param quizAttemptId The ID of the quiz attempt to add the answer to
-     * @param body The answer data, containing the question ID and the answer text
-     * @returns The added answer
-     */
-    async addQuestionAnswer(
+    async addQuestionsAnswer(
         @Param('quizAttemptId', ParseIntPipe) quizAttemptId: number,
-        @Body() body: { questionId: number; answer: string }
+        @Body() body: QuestionAnswerDto[]
     ) {
-        return this.quizService.addQuestionAnswer(quizAttemptId, body.questionId, body.answer);
+        return await this.quizService.addQuestionsAnswer(quizAttemptId, body);
     }
 
-    @Put('attempts/:quizAttemptId/answers')
+    @Post('attempts/:quizAttemptId/complete')
     @Roles(Role.STUDENT)
-    @ApiOperation({ summary: 'Update an answer in a quiz attempt' })
+    @ApiOperation({ summary: 'Complete a quiz attempt' })
     @ApiParam({ name: 'quizAttemptId', description: 'Quiz Attempt ID' })
-    @ApiBody({
-        schema: {
-            type: 'object',
-            properties: {
-                questionId: { type: 'number' },
-                answer: { type: 'string' }
-            },
-            required: ['questionId', 'answer']
-        }
-    })
-    @ApiResponse({ status: 200, description: 'Answer updated successfully' })
-    @ApiResponse({ status: 400, description: 'Invalid input data or quiz not editable' })
-    /**
-     * Updates an answer in a quiz attempt for the authenticated student
-     *
-     * @param quizAttemptId The ID of the quiz attempt to update the answer in
-     * @param body The answer data, containing the question ID and the answer text
-     * @returns The updated answer
-     */
-    async updateQuestionAnswer(
-        @Param('quizAttemptId', ParseIntPipe) quizAttemptId: number,
-        @Body() body: { questionId: number; answer: string }
-    ) {
-        return this.quizService.updateQuestionAnswer(quizAttemptId, body.questionId, body.answer);
+    @ApiResponse({ status: 200, description: 'Quiz attempt completed successfully' })
+    @ApiResponse({ status: 404, description: 'Quiz attempt not found' })
+    async completeQuizAttempt(@Param('quizAttemptId', ParseIntPipe) quizAttemptId: number, @Request() req) {
+        return await this.quizService.completeQuizAttempt(quizAttemptId, req.user.id);
     }
 
-    @Post(':quizId/questions/ai/save')
+    @Get('attempts/:quizAttemptId')
+    @Roles(Role.STUDENT)
+    @ApiOperation({ summary: 'Get quiz attempt details' })
+    @ApiParam({ name: 'quizAttemptId', description: 'Quiz Attempt ID' })
+    @ApiResponse({ status: 200, description: 'Quiz attempt retrieved successfully' })
+    @ApiResponse({ status: 404, description: 'Quiz attempt not found' })
+    async getQuizAttempt(@Param('quizAttemptId', ParseIntPipe) quizAttemptId: number, @Request() req) {
+        return await this.quizService.getQuizAttempt(quizAttemptId, req.user.id);
+    }
+
+    @Get('available')
+    @Roles(Role.STUDENT)
+    @ApiOperation({ summary: 'Get available quizzes for student' })
+    @ApiResponse({ status: 200, description: 'Available quizzes retrieved successfully' })
+    async getAvailableQuizzes(@Request() req) {
+        return await this.quizService.getAvailableQuizzes(req.user.id);
+    }
+
+    @Post(':id/request-feedback')
     @Roles(Role.TEACHER)
-    @ApiOperation({ summary: 'Save AI-generated questions (from Flutter) to DB' })
-    @ApiParam({ name: 'quizId', description: 'Quiz ID' })
-    @ApiBody({
-        schema: {
-            type: 'object',
-            properties: {
-                questions: {
-                    type: 'array',
-                    items: { $ref: '#/components/schemas/CreateQuestionDto' }
-                }
-            },
-            required: ['questions']
-        }
+    @ApiOperation({ summary: 'Request AI feedback for quiz attempts' })
+    @ApiParam({ name: 'id', description: 'Quiz ID' })
+    @ApiResponse({ status: 200, description: 'Feedback generated successfully' })
+    @ApiResponse({ status: 404, description: 'Quiz not found' })
+    async requestFeedbackStudent(@Param('id', ParseIntPipe) id: number, @Request() req) {
+        return await this.quizService.requestFeedbackStudent(req.user.id, id);
+    }
+
+    @Get('feedback/teacher/:studentId')
+    @Roles(Role.TEACHER)
+    @ApiOperation({ summary: 'Get teacher feedback requests for a student' })
+    @ApiResponse({ status: 200, description: 'Teacher feedback requests for a student retrieved successfully' })
+    @ApiParam({ name: 'studentId', description: 'Student ID' })
+    async getRequestedFeedbackTeacher(@Param('studentId', ParseIntPipe) studentId: number, @Request() req) {
+        return await this.quizService.getRequestedFeedbackTeacher(studentId, req.user.id);
+    }
+
+    @Post('feedback/teacher/:studentId')
+    @Roles(Role.TEACHER)
+    @ApiOperation({ summary: 'Request AI teacher feedback for student performance' })
+    @ApiParam({ name: 'studentId', description: 'Student ID' })
+    @ApiResponse({
+        status: 200,
+        description: 'Teacher feedback generated successfully'
     })
-    async saveAiQuestions(
-        @Param('quizId', ParseIntPipe) quizId: number,
-        @Body() body: { questions: CreateQuestionDto[] },
+    @ApiResponse({ status: 400, description: 'Invalid input data' })
+    async requestFeedbackTeacher(
+        @Param('studentId', ParseIntPipe) studentId: number,
         @Request() req
     ) {
-        return this.quizService.saveAiQuestions(req.user.id, quizId, body.questions);
+        return await this.quizService.requestFeedbackTeacher(req.user.id, studentId);
     }
-
-
-    @Post(':quizId/ai-generate')
-    @Roles(Role.TEACHER)
-    async generateAiQuestions(
-        @Param('quizId', ParseIntPipe) quizId: number,
-        @Body() generateQuizByAi: GenerateQuizDto,
-        @Req() req: any,
-    ) {
-        return this.quizService.generateAiQuestions(quizId, +req.user.id , generateQuizByAi);
-    }
-
 }
