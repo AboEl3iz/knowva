@@ -161,12 +161,22 @@ export class QuizController {
     })
     @ApiResponse({ status: 201, description: 'Questions added to quiz successfully' })
     @ApiResponse({ status: 400, description: 'Invalid input data' })
+    /**
+     * Adds a manual question to a quiz for the authenticated teacher
+     *
+     * @param quizId The ID of the quiz to add the question to
+     * @param createQuestionDtos The question data to add to the quiz
+     * @returns The added questions
+     */
     async addManualQuestionsToQuiz(
         @Param('quizId', ParseIntPipe) quizId: number,
         @Body() createQuestionDtos: CreateQuestionDto[],
         @Request() req
     ) {
-        return await this.quizService.addManualQuestionsToQuiz(req.user.id, quizId, createQuestionDtos);
+        const questionsToProcess = Array.isArray(createQuestionDtos) 
+        ? createQuestionDtos 
+        : [createQuestionDtos];
+        return await this.quizService.addManualQuestionsToQuiz(req.user.id, quizId, questionsToProcess);
     }
 
     @Post(':quizId/questions/:questionId')
@@ -192,7 +202,7 @@ export class QuizController {
         return await this.quizService.addOldQuestionToQuiz(req.user.id, quizId, questionId);
     }
 
-    @Post(':quizId/questions/ai')
+    @Post('questions/ai/:quizId')
     @Roles(Role.TEACHER)
     @ApiOperation({ summary: 'Add AI-generated questions to a quiz' })
     @ApiParam({ name: 'quizId', description: 'Quiz ID' })
@@ -259,6 +269,13 @@ export class QuizController {
     @ApiParam({ name: 'id', description: 'Question ID' })
     @ApiResponse({ status: 200, description: 'Question removed from quiz successfully' })
     @ApiResponse({ status: 404, description: 'Question not found' })
+    /**
+     * Removes a question from its associated quiz for the authenticated teacher
+     *
+     * @param questionId The ID of the question to remove
+     * @param quizId The ID of the quiz to remove the question from
+     * @returns The result of the removal operation
+     */
     async removeQuestionFromQuiz(
         @Param('questionId', ParseIntPipe) questionId: number,
         @Param('quizId', ParseIntPipe) quizId: number,
@@ -337,6 +354,14 @@ export class QuizController {
     @ApiBody({ type: [QuestionAnswerDto] })
     @ApiResponse({ status: 201, description: 'Answer added successfully' })
     @ApiResponse({ status: 400, description: 'Invalid input data' })
+
+    /**
+     * Adds answers to a quiz attempt for the authenticated student
+     *
+     * @param quizAttemptId The ID of the quiz attempt to add answers to
+     * @param body The answers to add
+     * @returns The updated quiz attempt
+     */
     async addQuestionsAnswer(
         @Param('quizAttemptId', ParseIntPipe) quizAttemptId: number,
         @Body() body: QuestionAnswerDto[]
@@ -349,7 +374,14 @@ export class QuizController {
     @ApiOperation({ summary: 'Complete a quiz attempt' })
     @ApiParam({ name: 'quizAttemptId', description: 'Quiz Attempt ID' })
     @ApiResponse({ status: 200, description: 'Quiz attempt completed successfully' })
-    @ApiResponse({ status: 404, description: 'Quiz attempt not found' })
+     @ApiResponse({ status: 404, description: 'Quiz attempt not found' })
+
+    /**
+     * Completes a quiz attempt for the authenticated student
+     *
+     * @param quizAttemptId The ID of the quiz attempt to complete
+     * @returns The completed quiz attempt
+     */
     async completeQuizAttempt(@Param('quizAttemptId', ParseIntPipe) quizAttemptId: number, @Request() req) {
         return await this.quizService.completeQuizAttempt(quizAttemptId, req.user.id);
     }
@@ -360,6 +392,12 @@ export class QuizController {
     @ApiParam({ name: 'quizAttemptId', description: 'Quiz Attempt ID' })
     @ApiResponse({ status: 200, description: 'Quiz attempt retrieved successfully' })
     @ApiResponse({ status: 404, description: 'Quiz attempt not found' })
+    /**
+     * Retrieves a quiz attempt by ID for the authenticated student
+     *
+     * @param quizAttemptId The ID of the quiz attempt to retrieve
+     * @returns The quiz attempt object
+     */
     async getQuizAttempt(@Param('quizAttemptId', ParseIntPipe) quizAttemptId: number, @Request() req) {
         return await this.quizService.getQuizAttempt(quizAttemptId, req.user.id);
     }
@@ -368,6 +406,11 @@ export class QuizController {
     @Roles(Role.STUDENT)
     @ApiOperation({ summary: 'Get available quizzes for student' })
     @ApiResponse({ status: 200, description: 'Available quizzes retrieved successfully' })
+    /**
+     * Retrieves all quizzes that the authenticated student is eligible to attempt
+     *
+     * @returns The available quizzes
+     */
     async getAvailableQuizzes(@Request() req) {
         return await this.quizService.getAvailableQuizzes(req.user.id);
     }
@@ -378,6 +421,12 @@ export class QuizController {
     @ApiParam({ name: 'id', description: 'Quiz ID' })
     @ApiResponse({ status: 200, description: 'Feedback generated successfully' })
     @ApiResponse({ status: 404, description: 'Quiz not found' })
+    /**
+     * Requests AI feedback for a quiz for the authenticated teacher
+     *
+     * @param id The ID of the quiz to generate feedback for
+     * @returns The feedback generated by the AI
+     */
     async requestFeedbackStudent(@Param('id', ParseIntPipe) id: number, @Request() req) {
         return await this.quizService.requestFeedbackStudent(req.user.id, id);
     }
@@ -387,6 +436,12 @@ export class QuizController {
     @ApiOperation({ summary: 'Get teacher feedback requests for a student' })
     @ApiResponse({ status: 200, description: 'Teacher feedback requests for a student retrieved successfully' })
     @ApiParam({ name: 'studentId', description: 'Student ID' })
+    /**
+     * Retrieves all teacher feedback requests for a student for the authenticated teacher
+     *
+     * @param studentId The ID of the student to retrieve feedback requests for
+     * @returns The feedback requests
+     */
     async getRequestedFeedbackTeacher(@Param('studentId', ParseIntPipe) studentId: number, @Request() req) {
         return await this.quizService.getRequestedFeedbackTeacher(studentId, req.user.id);
     }
@@ -400,6 +455,12 @@ export class QuizController {
         description: 'Teacher feedback generated successfully'
     })
     @ApiResponse({ status: 400, description: 'Invalid input data' })
+    /**
+     * Requests AI teacher feedback for a student's performance for the authenticated teacher
+     *
+     * @param studentId The ID of the student to generate feedback for
+     * @returns The feedback generated by the AI
+     */
     async requestFeedbackTeacher(
         @Param('studentId', ParseIntPipe) studentId: number,
         @Request() req

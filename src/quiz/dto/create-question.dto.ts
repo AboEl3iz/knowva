@@ -1,24 +1,37 @@
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString } from "class-validator";
 import { QuestionType } from "@prisma/client";
 
 export class CreateQuestionDto {
-    @IsNotEmpty()
-    @IsString()
-    question: string;
+  @ApiProperty({ example: "What is the capital of France?", description: "Question text" })
+  @IsNotEmpty()
+  @IsString()
+  question: string;
 
-    @IsNotEmpty()
-    @IsEnum(QuestionType)
-    type: QuestionType;
+  @ApiProperty({
+    example: "MCQ",
+    enum: QuestionType,
+    description: "Type of the question (MCQ, TRUE_FALSE, WRITTEN, etc.)"
+  })
+  @IsNotEmpty()
+  @IsEnum(QuestionType)
+  type: QuestionType;
 
-    @IsOptional()
-    @IsString({ each: true })
-    options?: string[];
+  @ApiPropertyOptional({
+    example: ["Paris", "London", "Berlin", "Madrid"],
+    description: "Options for multiple-choice questions"
+  })
+  @IsOptional()
+  @IsString({ each: true })
+  options?: string[];
 
-    @IsNotEmpty()
-    @IsString()
-    answer: string;
+  @ApiProperty({ example: "Paris", description: "Correct answer to the question" })
+  @IsNotEmpty()
+  @IsString()
+  answer: string;
 
-    @IsNotEmpty()
-    @IsNumber()
-    score: number;
+  @ApiProperty({ example: 5, description: "Score/points allocated for this question" })
+  @IsNotEmpty()
+  @IsNumber()
+  score: number;
 }

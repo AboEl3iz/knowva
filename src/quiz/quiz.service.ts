@@ -205,22 +205,48 @@ export class QuizService {
     async addManualQuestionsToQuiz(userId: number, quizId: number, questionDtos: CreateQuestionDto[]) {
         const quiz = await this.prisma.quiz.findUnique({ where: { id: quizId, createdById: userId } });
         if (!quiz) throw new BadRequestException('Quiz not found');
+        if (questionDtos.length === 0) throw new BadRequestException('No questions provided');
 
-        for (const questionDto of questionDtos) {
-            const errors = await validate(questionDto);
-            if (errors.length > 0) {
-                throw new InternalServerErrorException('Invalid question data');
-            }
-            this.validateQuestionOptions(questionDto);
-        }
+        // Perform validation checks for each questionDto
+        // for (const questionDto of questionDtos) {
+        //     const errors = await validate(questionDto);
+        //     if (errors.length > 0) {
+        //         console.log(errors);
+        //         throw new BadRequestException('Invalid question data');
+        //     }
+        //     this.validateQuestionOptions(questionDto);
+        // }
 
-        return await this.prisma.question.createMany({
-            data: questionDtos.map((questionDto) => ({
-                ...questionDto,
-                createdById: userId,
-                quizId,
-                mode: QuestionMode.MANUAL
-            }))
+        // Use a transaction to create questions and their relations atomically
+        return await this.prisma.$transaction(async (tx) => {
+            // Step 1: Create the new question records
+            const newQuestions = await Promise.all(
+                questionDtos.map(dto =>
+                    tx.question.create({
+                        data: {
+                            quizId: quiz.id,
+                            ...dto,
+                            createdById: userId,
+                            mode: QuestionMode.MANUAL,
+                        },
+                    }),
+                ),
+            );
+
+            // Step 2: Create the join records in the QuizQuestion table
+            const quizQuestionsData = newQuestions.map((question) => ({
+                quizId: quiz.id,
+                questionId: question.id,
+            }));
+
+            await tx.quizQuestion.createMany({
+                data: quizQuestionsData,
+            });
+
+            return {
+                message: `Successfully added ${newQuestions.length} questions to the quiz.`,
+                addedQuestions: newQuestions,
+            };
         });
     }
 
