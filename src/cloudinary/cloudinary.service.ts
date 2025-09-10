@@ -107,7 +107,7 @@ export class CloudinaryService {
     });
   }
 
-  // Helper function for specific use cases
+ 
   async uploadLessonFile(file: Express.Multer.File): Promise<any> {
     return this.uploadFile(file, 'lessons', {
       allowedTypes: ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'txt', 'mp4', 'mp3'],
@@ -127,7 +127,7 @@ export class CloudinaryService {
   async uploadProfileImage(file: Express.Multer.File): Promise<any> {
     return this.uploadFile(file, 'profiles', {
       allowedTypes: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
-      maxSize: 5 * 1024 * 1024, // 5MB limit
+      maxSize: 5 * 1024 * 1024, 
       resourceType: 'image'
     });
   }
