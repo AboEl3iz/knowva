@@ -75,6 +75,58 @@ export class EnrollmentService {
     return enrollment;
   }
 
+  async createByToken(token: string, userId: number) {
+    const group = await this.prisma.group.findUnique({ where: { token } });
+    if (!group) throw new BadRequestException("Invalid group token");
+
+    if (group.status === "COMPLETED") {
+      throw new BadRequestException("Group is already completed");
+    }
+
+    const existingEnrollment = await this.prisma.membership.findFirst({
+      where: { groupId: group.id, studentId: userId },
+    });
+    if (existingEnrollment) {
+      throw new BadRequestException("User is already enrolled in this group");
+    }
+
+    const enrollment = await this.prisma.membership.create({
+      data: {
+        groupId: group.id,
+        studentId: userId,
+        status: Status.PENDING,
+      },
+      include: {
+        group: {
+          select: {
+            id: true,
+            name: true,
+            capacity: true,
+            createdBy: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+        },
+        student: { select: { id: true, name: true, email: true } },
+      },
+    });
+
+    // 🔔 notify teacher
+    await this.notificationService.create(
+      enrollment.group.createdBy.id,
+      `You have a new enrollment request in group ${enrollment.group.name}`,
+      NotificationType.GROUP_JOINED,
+    );
+    this.notificationGateway.sendNotification(
+      enrollment.group.createdBy.id.toString(),
+      `You have a new enrollment request in group ${enrollment.group.name} from ${enrollment.student.name}`,
+    );
+
+    // ✅ update group status if needed
+    await this.groupService.checkAndUpdateStatus(group.id);
+
+    return enrollment;
+  }
 
   async findAll(groupId: number): Promise<Membership[]> {
     let group = await this.prisma.group.findUnique({

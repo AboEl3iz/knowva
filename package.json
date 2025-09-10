@@ -5,11 +5,10 @@
   "author": "",
   "private": true,
   "license": "UNLICENSED",
-  "prisma" : {
-      "seed": "ts-node prisma/seed.ts"
-    },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  },
   "scripts": {
-    
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
@@ -44,10 +43,11 @@
     "cache-manager": "^7.1.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
-    "google-auth-library": "^10.3.0",
     "cloudinary": "^2.7.0",
+    "google-auth-library": "^10.3.0",
     "mjml": "^4.7.1",
     "multer": "^2.0.2",
+    "nanoid": "^5.1.5",
     "nodemailer": "^7.0.5",
     "otp-generator": "^4.0.1",
     "passport": "^0.7.0",

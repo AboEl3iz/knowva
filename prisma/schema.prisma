@@ -123,8 +123,8 @@ model Group {
   Conversation Conversation[]
   lessons      LessonGroup[]
   createdAt    DateTime       @default(now())
-
-  quizzes Quiz[]
+  token        String         @unique
+  quizzes      Quiz[]
 }
 
 model Membership {

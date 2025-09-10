@@ -19,8 +19,8 @@ export class EnrollmentController {
    * @param groupId the id of the group to add the enrollment to
    * @returns the created enrollment object
    */
-  create(@Query('groupId', ParseIntPipe) groupId: string , @Req () req: any) {
-    return this.enrollmentService.create(+groupId, +req.user.id);
+  create(@Query('token') token: string , @Req () req: any) {
+    return this.enrollmentService.createByToken(token, +req.user.id);
   }
 
   @Get('group/all/:groupId')

@@ -4,89 +4,104 @@ import { UpdateGroupDto } from './dto/update-group.dto';
 import { PrismaService } from 'src/database/prisma.service';
 import { Group } from '@prisma/client';
 import { IGroup } from 'src/helper/interfaces/interfaces.response';
-
+import { randomBytes } from "crypto";
+import { customAlphabet, nanoid } from 'nanoid';
 @Injectable()
 export class GroupService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {
+    const nanoid = customAlphabet("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 6);
+  }
+
   async create(createGroupDto: CreateGroupDto, subjectId: number, userId: number): Promise<Group> {
     let subject = await this.prisma.subject.findUnique({ where: { id: subjectId } });
     if (!subject) throw new BadRequestException("Subject not found");
+    // take first 4 letters of group name uppercased
+    const prefix = createGroupDto.name
+      .replace(/\s+/g, "")
+      .substring(0, 4)
+      .toUpperCase();
+
+    // generate short random code
+    const suffix = nanoid(); // e.g., 3F9XK2
+
+    const token = `${prefix}-${suffix}`;
     let group = await this.prisma.group.create({
       data: {
         name: createGroupDto.name,
         capacity: createGroupDto.capacity,
         subjectId: subjectId,
-        createdById: userId
+        createdById: userId,
+        token: token,
       },
     });
     return group;
   }
 
   async toggleGroupStatus(groupId: number, userId: number): Promise<IGroup> {
-  const group = await this.prisma.group.findUnique({
-    where: { id: groupId },
-    include: {
-      memberships: {
-        select: { student: { select: { id: true } } },
-        where: { status: 'APPROVED' },
+    const group = await this.prisma.group.findUnique({
+      where: { id: groupId },
+      include: {
+        memberships: {
+          select: { student: { select: { id: true } } },
+          where: { status: 'APPROVED' },
+        },
       },
-    },
-  });
+    });
 
-  if (!group) throw new BadRequestException("Group not found");
+    if (!group) throw new BadRequestException("Group not found");
 
-  if (group.createdById !== userId) {
-    throw new BadRequestException("Only the creator can change this group status");
-  }
+    if (group.createdById !== userId) {
+      throw new BadRequestException("Only the creator can change this group status");
+    }
 
-  if (group.status === 'COMPLETED') {
-    throw new BadRequestException("Cannot toggle a completed group");
-  }
+    if (group.status === 'COMPLETED') {
+      throw new BadRequestException("Cannot toggle a completed group");
+    }
 
-  // toggle status
-  const newStatus = group.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    // toggle status
+    const newStatus = group.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
 
-  const updatedGroup = await this.prisma.group.update({
-    where: { id: groupId },
-    data: { status: newStatus },
-    include: {
-      memberships: {
-        select: { student: { select: { id: true , name: true, email: true } } },
-        where: { status: 'APPROVED' },
+    const updatedGroup = await this.prisma.group.update({
+      where: { id: groupId },
+      data: { status: newStatus },
+      include: {
+        memberships: {
+          select: { student: { select: { id: true, name: true, email: true } } },
+          where: { status: 'APPROVED' },
+        },
       },
-    },
-  });
+    });
 
-  // map DB enum → API value
-  let status: "complete" | "active" | "inactive";
-  switch (updatedGroup.status) {
-    case "COMPLETED":
-      status = "complete";
-      break;
-    case "INACTIVE":
-      status = "inactive";
-      break;
-    default:
-      status = "active";
+    // map DB enum → API value
+    let status: "complete" | "active" | "inactive";
+    switch (updatedGroup.status) {
+      case "COMPLETED":
+        status = "complete";
+        break;
+      case "INACTIVE":
+        status = "inactive";
+        break;
+      default:
+        status = "active";
+    }
+
+    return {
+      id: updatedGroup.id.toString(),
+      name: updatedGroup.name,
+      teacherId: updatedGroup.createdById.toString(),
+      subjectId: updatedGroup.subjectId.toString(),
+      capacity: updatedGroup.capacity.toString(),
+      studentIds: updatedGroup.memberships.map(m => {
+        return {
+          id: m.student.id.toString(),
+          name: m.student.name,
+          email: m.student.email
+        }
+      }),
+      status,
+      createdAt: updatedGroup.createdAt,
+    };
   }
-
-  return {
-    id: updatedGroup.id.toString(),
-    name: updatedGroup.name,
-    teacherId: updatedGroup.createdById.toString(),
-    subjectId: updatedGroup.subjectId.toString(),
-    capacity: updatedGroup.capacity.toString(),
-    studentIds: updatedGroup.memberships.map(m => {
-      return {
-        id: m.student.id.toString(),
-        name: m.student.name,
-        email: m.student.email
-      }
-    }),
-    status,
-    createdAt: updatedGroup.createdAt,
-  };
-}
 
 
   async checkAndUpdateStatus(groupId: number) {
@@ -160,12 +175,12 @@ export class GroupService {
   }
 
   async findAllByTeacher(teacherId: number): Promise<IGroup[]> {
-    
+
 
     let groups = await this.prisma.group.findMany({
-      where: { 
+      where: {
         createdById: teacherId
-       },
+      },
       include: {
         memberships: {
           select: {
@@ -283,19 +298,20 @@ export class GroupService {
   }
 
   async remove(id: number, userId: number) {
-    let group = await this.prisma.group.findUnique({ where:  { id: id, createdById: userId  },
-    include: {
-      memberships: {
-        select: {
-          student: { select: { id: true, name: true, email: true } },
+    let group = await this.prisma.group.findUnique({
+      where: { id: id, createdById: userId },
+      include: {
+        memberships: {
+          select: {
+            student: { select: { id: true, name: true, email: true } },
+          },
+
         },
-        
-      },
-    }
-   });
+      }
+    });
     if (!group) throw new BadRequestException("Group not found");
-    if(group.memberships.length > 0) throw new BadRequestException("Group has enrolled students");
-    
+    if (group.memberships.length > 0) throw new BadRequestException("Group has enrolled students");
+
     await this.prisma.group.delete({ where: { id: id } });
     return { message: "Group deleted successfully" };
   }
