@@ -43,11 +43,19 @@ export class QuizService {
     }
 
     async getQuiz(id: number, userId: number) {
-        let quiz = await (this.prisma as any).quiz.findUnique({
+        let quiz = await this.prisma.quiz.findUnique({
             where: { id, createdById: userId },
-            include: { questions: { include: { question: true } } } as any
+            include: {
+                questions: {
+                    include: {
+                        question: true, // دي هترجع تفاصيل السؤال نفسه
+                    },
+                },
+            },
         });
+
         if (!quiz) throw new BadRequestException('Quiz not found');
+
         let currentStatus: "UPCOMING" | "ONGOING" | "ENDED";
         if (new Date(quiz.startsAt) > new Date()) {
             currentStatus = "UPCOMING";
@@ -56,12 +64,13 @@ export class QuizService {
         } else {
             currentStatus = "ENDED";
         }
+
         return {
             ...quiz,
-            currentStatus
-        }
-
+            currentStatus,
+        };
     }
+
 
     async createQuiz(userId: number, createQuizDto: CreateQuizDto) {
         if (new Date(createQuizDto.endsAt) <= new Date(createQuizDto.startsAt)) {
@@ -343,24 +352,39 @@ export class QuizService {
             }
         }
 
-        // 6. تخزين البيانات في DB
-        const result = await this.prisma.question.createMany({
-            data: dtos.map((q) => ({
-                ...q,
-                createdById: userId,
-                quizId,
-                mode: QuestionMode.AI,
-            })),
-        });
+        // 6. تخزين البيانات + ربطها بالـ quiz
+        return await this.prisma.$transaction(async (tx) => {
+            // أنشئ الأسئلة
+            const createdQuestions = await Promise.all(
+                dtos.map((dto) =>
+                    tx.question.create({
+                        data: {
+                            ...dto,
+                            createdById: userId,
+                            quizId,
+                            mode: QuestionMode.AI,
+                        },
+                    }),
+                ),
+            );
 
-        // 7. إرجاع النتيجة
-        return {
-            message: `Successfully added ${result.count} questions to the quiz.`,
-            addedQuestions: result.count,
-            totalFocusQuestions: generateAIQuestionsDto.noOfFocusQuestions,
-            totalRemainQuestions: generateAIQuestionsDto.noOfRemainQuestions || 0,
-        };
+            // أنشئ روابط في QuizQuestion
+            await tx.quizQuestion.createMany({
+                data: createdQuestions.map((q) => ({
+                    quizId,
+                    questionId: q.id,
+                })),
+            });
+
+            return {
+                message: `Successfully added ${createdQuestions.length} questions to the quiz.`,
+                addedQuestions: createdQuestions.length,
+                totalFocusQuestions: generateAIQuestionsDto.noOfFocusQuestions,
+                totalRemainQuestions: generateAIQuestionsDto.noOfRemainQuestions || 0,
+            };
+        });
     }
+
 
 
     async correctQuiz(userId: number, quizId: number) {
