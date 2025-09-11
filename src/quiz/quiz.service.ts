@@ -268,14 +268,14 @@ export class QuizService {
         }
 
         // Validate that if remain questions are requested, all remain fields are provided
-        if (generateAIQuestionsDto.noOfRemainQuestions && generateAIQuestionsDto.noOfRemainQuestions > 0) {
-            if (!generateAIQuestionsDto.remainPages ||
-                generateAIQuestionsDto.mcqRemainRatio === undefined ||
-                generateAIQuestionsDto.tfRemainRatio === undefined ||
-                generateAIQuestionsDto.writtenRemainRatio === undefined) {
-                throw new BadRequestException('If remain questions are requested, remainPages and all remain ratios must be provided');
-            }
-        }
+        // if (generateAIQuestionsDto.noOfRemainQuestions && generateAIQuestionsDto.noOfRemainQuestions > 0) {
+        //     if (!generateAIQuestionsDto.remainPages ||
+        //         generateAIQuestionsDto.mcqRemainRatio === undefined ||
+        //         generateAIQuestionsDto.tfRemainRatio === undefined ||
+        //         generateAIQuestionsDto.writtenRemainRatio === undefined) {
+        //         throw new BadRequestException('If remain questions are requested, remainPages and all remain ratios must be provided');
+        //     }
+        // }
 
         // Build the AI model request payload
         const aiRequestPayload: any = {
