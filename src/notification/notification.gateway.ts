@@ -26,12 +26,11 @@ export class NotificationGateway {
     if (!token) {
       client.disconnect();
       throw new NotFoundException('Missing auth token');
-      
-
     }
 
     try {
       const payload = this.jwtService.verify(token);
+
       (client as any).user = payload;
       console.log(`✅ WS Authenticated user: ${payload.id}`);
       const userId = (client as any).user.id;

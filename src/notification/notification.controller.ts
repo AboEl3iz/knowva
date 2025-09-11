@@ -29,6 +29,7 @@ import { NotificationType } from '@prisma/client';
 class NotificationDto {
   id: number;
   userId: number;
+  type: NotificationType;
   message: string;
   read: boolean;
   createdAt: Date;
@@ -110,18 +111,12 @@ export class NotificationController {
       type: [NotificationDto],
       example: [
         {
-          id: 1,
-          userId: 123,
-          message: "New message from teacher",
+          id: 3,
+          userId: 2,
+          message: "New quiz: Quantum Physics Basics starts at 2025-08-15T09:00:00.000Z",
+          type: "QUIZ_ASSIGNED",
           read: false,
-          createdAt: "2024-01-15T10:30:00Z"
-        },
-        {
-          id: 2,
-          userId: 123,
-          message: "Assignment due tomorrow",
-          read: true,
-          createdAt: "2024-01-14T15:20:00Z"
+          createdAt: "2025-09-10T15:22:00.996Z"
         }
       ]
     })
@@ -162,11 +157,12 @@ export class NotificationController {
       type: [NotificationDto],
       example: [
         {
-          id: 1,
-          userId: 123,
-          message: "New message from teacher",
+          id: 3,
+          userId: 2,
+          message: "New quiz: Quantum Physics Basics starts at 2025-08-15T09:00:00.000Z",
+          type: "QUIZ_ASSIGNED",
           read: false,
-          createdAt: "2024-01-15T10:30:00Z"
+          createdAt: "2025-09-10T15:22:00.996Z"
         }
       ]
     })
