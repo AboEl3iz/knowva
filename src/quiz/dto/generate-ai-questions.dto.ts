@@ -151,16 +151,24 @@ export class GenerateAIQuestionsDto {
     validator: {
       validate(value, args) {
         const obj = args?.object as GenerateAIQuestionsDto;
-        if (obj.mcqRemainRatio !== undefined && obj.tfRemainRatio !== undefined && obj.writtenRemainRatio !== undefined) {
-          const remainSum = obj.mcqRemainRatio + obj.tfRemainRatio + obj.writtenRemainRatio;
-          return Math.abs(remainSum - 1.0) < 0.01; // Allow small floating point errors
-        }
-        return true; // If remain ratios are not all provided, skip validation
+        const mcq = obj.mcqRemainRatio ?? 0;
+        const tf = obj.tfRemainRatio ?? 0;
+        const written = obj.writtenRemainRatio ?? 0;
+
+        const remainSum = mcq + tf + written;
+
+        // الحالة 1: كلهم صفر
+        if (remainSum === 0) return true;
+
+        // الحالة 2: لازم يكونوا = 1.0 تقريباً
+        return Math.abs(remainSum - 1.0) < 0.01;
       },
       defaultMessage() {
-        return 'Remain question ratios must sum to 1.0';
+        return 'Remain question ratios must either all be 0 or sum to 1.0';
       }
     }
   })
   remainRatiosValid?: boolean;
+
+  // remainRatiosValid?: boolean;
 }
