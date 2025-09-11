@@ -868,7 +868,7 @@ export class QuizService {
             }
         }
 
-        await this.prisma.questionFeedback.createMany({
+       return await this.prisma.questionFeedback.createMany({
             data: attempts.flatMap((attempt) => attempt.results.map((result) => ({
                 answerId: result.answer_id,
                 feedback: result.feedback
