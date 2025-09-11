@@ -70,7 +70,8 @@ export class QuizService {
         let group = await this.prisma.group.findUnique({ where: { id: createQuizDto.groupId } });
         if (!group) throw new BadRequestException('Group not found');
         const isActive = new Date(createQuizDto.startsAt) <= new Date();
-        const quiz = await this.prisma.quiz.create({ data: { ...createQuizDto, createdById: userId, isActive, status: 'DRAFT' as any } });
+        const quiz = await this.prisma.quiz.create({ data: { ...createQuizDto, createdById: userId, isActive, status: 'DRAFT' as any , startsAt: new Date(createQuizDto.startsAt),
+    endsAt: new Date(createQuizDto.endsAt), } });
         // Do NOT notify students on draft creation
         return quiz.id;
     }
