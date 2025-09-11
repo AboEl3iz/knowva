@@ -18,7 +18,7 @@ import { ConfigService } from '@nestjs/config';
 export class QuizService {
     constructor(private prisma: PrismaService, private notifications: NotificationService,
         private readonly notificationGateway: NotificationGateway,
-        private readonly config : ConfigService
+        private readonly config: ConfigService
         // private readonly http: HttpService,
     ) { }
 
@@ -224,14 +224,25 @@ export class QuizService {
         //     }
         //     this.validateQuestionOptions(questionDto);
         // }
+        for (const dto of questionDtos) {
+            if (dto.type === QuestionType.MCQ && !dto.score) {
+                dto.score = 1;
+            } else if (dto.type === QuestionType.TrueFalse && !dto.score) {
+                dto.score = 2;
+            } else if (dto.type === QuestionType.Written && !dto.score) {
+                dto.score = 3;
+            }
+        }
 
         // Use a transaction to create questions and their relations atomically
         return await this.prisma.$transaction(async (tx) => {
             // Step 1: Create the new question records
             const newQuestions = await Promise.all(
                 questionDtos.map(dto =>
+
                     tx.question.create({
                         data: {
+                            score : dto.score! ,
                             quizId: quiz.id,
                             ...dto,
                             createdById: userId,
@@ -288,16 +299,16 @@ export class QuizService {
             f_tf_ratio: generateAIQuestionsDto.tfFocusRatio,
             f_written_ratio: generateAIQuestionsDto.writtenFocusRatio
         };
-        
+
 
         // Add remain questions data if provided
-         if (generateAIQuestionsDto.noOfRemainQuestions && generateAIQuestionsDto.noOfRemainQuestions > 0) {
-            aiRequestPayload.n_remain = generateAIQuestionsDto.noOfRemainQuestions ;
+        if (generateAIQuestionsDto.noOfRemainQuestions && generateAIQuestionsDto.noOfRemainQuestions > 0) {
+            aiRequestPayload.n_remain = generateAIQuestionsDto.noOfRemainQuestions;
             aiRequestPayload.remain_pages = generateAIQuestionsDto.remainPages;
             aiRequestPayload.r_mcq_ratio = generateAIQuestionsDto.mcqRemainRatio;
             aiRequestPayload.r_tf_ratio = generateAIQuestionsDto.tfRemainRatio;
             aiRequestPayload.r_written_ratio = generateAIQuestionsDto.writtenRemainRatio;
-         }
+        }
 
         let response;
         try {
@@ -310,7 +321,7 @@ export class QuizService {
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    
+
                 }
             );
         } catch (error) {

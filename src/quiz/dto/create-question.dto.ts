@@ -30,8 +30,7 @@ export class CreateQuestionDto {
   @IsString()
   answer: string;
 
-  @ApiProperty({ example: 5, description: "Score/points allocated for this question" })
-  @IsNotEmpty()
+  @IsOptional()
   @IsNumber()
-  score: number;
+  score?: number;
 }
