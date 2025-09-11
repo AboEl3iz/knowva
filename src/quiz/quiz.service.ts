@@ -820,7 +820,7 @@ export class QuizService {
         let response;
         try {
             response = await axios.post(
-                "https://8000-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/feedback_student",
+                "https://8080-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/feedback_student",
                 quiz.attempts.map((attempt) => ({
                     "attempt_id": attempt.id,
                     "questions": attempt.studentAnswers.map((sa) => ({
@@ -849,10 +849,10 @@ export class QuizService {
             }))
 
             for (const dto of dtos) {
-                const errors = await validate(dto);
-                if (errors.length > 0) {
-                    throw new InternalServerErrorException('Invalid question data');
-                }
+                // const errors = await validate(dto);
+                // if (errors.length > 0) {
+                //     throw new InternalServerErrorException('Invalid question data');
+                // }
                 this.validateQuestionOptions(dto);
             }
         }
