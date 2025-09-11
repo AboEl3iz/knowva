@@ -27,12 +27,12 @@ export class CreateQuizDto {
   @ApiProperty({ example: "2025-09-15T09:00:00Z", description: "Start date/time of the quiz (ISO8601 format)" })
   @IsNotEmpty()
   @IsDateString()
-  startsAt: Date;
+  startsAt: string;
 
   @ApiProperty({ example: "2025-09-15T10:30:00Z", description: "End date/time of the quiz (ISO8601 format)" })
   @IsNotEmpty()
   @IsDateString()
-  endsAt: Date;
+  endsAt: string;
 
   @ApiProperty({ example: 90, description: "Duration of the quiz in minutes" })
   @IsNotEmpty()
