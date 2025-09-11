@@ -13,10 +13,12 @@ import { QuestionMode, QuestionType, NotificationType } from '@prisma/client';
 import { NotificationService } from 'src/notification/notification.service';
 import { NotificationGateway } from 'src/notification/notification.gateway';
 import { WrittenQuestionPayload } from 'src/helper/interfaces/interfaces.response';
+import { ConfigService } from '@nestjs/config';
 @Injectable()
 export class QuizService {
     constructor(private prisma: PrismaService, private notifications: NotificationService,
         private readonly notificationGateway: NotificationGateway,
+        private readonly config: ConfigService
         // private readonly http: HttpService,
     ) { }
 
@@ -70,8 +72,12 @@ export class QuizService {
         let group = await this.prisma.group.findUnique({ where: { id: createQuizDto.groupId } });
         if (!group) throw new BadRequestException('Group not found');
         const isActive = new Date(createQuizDto.startsAt) <= new Date();
-        const quiz = await this.prisma.quiz.create({ data: { ...createQuizDto, createdById: userId, isActive, status: 'DRAFT' as any , startsAt: new Date(createQuizDto.startsAt),
-    endsAt: new Date(createQuizDto.endsAt), } });
+        const quiz = await this.prisma.quiz.create({
+            data: {
+                ...createQuizDto, createdById: userId, isActive, status: 'DRAFT' as any, startsAt: new Date(createQuizDto.startsAt),
+                endsAt: new Date(createQuizDto.endsAt),
+            }
+        });
         // Do NOT notify students on draft creation
         return quiz.id;
     }
@@ -253,46 +259,87 @@ export class QuizService {
     }
 
     async addAiQuestionsToQuiz(userId: number, quizId: number, generateAIQuestionsDto: GenerateAIQuestionsDto) {
-        const quiz = await this.prisma.quiz.findUnique({ where: { id: quizId, createdById: userId } });
+        const quiz = await this.prisma.quiz.findUnique({
+            where: { id: quizId, createdById: userId }
+        });
 
         if (!quiz) {
             throw new BadRequestException('Quiz not found');
         }
 
+        // Validate that if remain questions are requested, all remain fields are provided
+        if (generateAIQuestionsDto.noOfRemainQuestions && generateAIQuestionsDto.noOfRemainQuestions > 0) {
+            if (!generateAIQuestionsDto.remainPages ||
+                generateAIQuestionsDto.mcqRemainRatio === undefined ||
+                generateAIQuestionsDto.tfRemainRatio === undefined ||
+                generateAIQuestionsDto.writtenRemainRatio === undefined) {
+                throw new BadRequestException('If remain questions are requested, remainPages and all remain ratios must be provided');
+            }
+        }
+
+        // Build the AI model request payload
+        const aiRequestPayload: any = {
+            language: quiz.language || "en", // Default to English if not set
+            level: generateAIQuestionsDto.difficulty,
+            pdf_path: generateAIQuestionsDto.pdfPath,
+            n_focus: generateAIQuestionsDto.noOfFocusQuestions,
+            focus_pages: generateAIQuestionsDto.focusPages,
+            f_mcq_ratio: generateAIQuestionsDto.mcqFocusRatio,
+            f_tf_ratio: generateAIQuestionsDto.tfFocusRatio,
+            f_written_ratio: generateAIQuestionsDto.writtenFocusRatio
+        };
+        const normalizeRatio = (value: number) => value > 1 ? value / 100 : value;
+
+        aiRequestPayload.f_mcq_ratio = normalizeRatio(generateAIQuestionsDto.mcqFocusRatio);
+        aiRequestPayload.f_tf_ratio = normalizeRatio(generateAIQuestionsDto.tfFocusRatio);
+        aiRequestPayload.f_written_ratio = normalizeRatio(generateAIQuestionsDto.writtenFocusRatio);
+
+        // Add remain questions data if provided
+        if (generateAIQuestionsDto.noOfRemainQuestions && generateAIQuestionsDto.noOfRemainQuestions > 0) {
+            aiRequestPayload.n_remain = generateAIQuestionsDto.noOfRemainQuestions;
+            aiRequestPayload.remain_pages = generateAIQuestionsDto.remainPages;
+            aiRequestPayload.r_mcq_ratio = normalizeRatio(generateAIQuestionsDto.mcqRemainRatio!);
+            aiRequestPayload.r_tf_ratio = normalizeRatio(generateAIQuestionsDto.tfRemainRatio!);
+            aiRequestPayload.r_written_ratio = normalizeRatio(generateAIQuestionsDto.writtenRemainRatio!);
+        }
+
         let response;
         try {
+            Logger.debug('AI Request Payload:', JSON.stringify(aiRequestPayload, null, 2));
+
             response = await axios.post(
                 "https://8080-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/generate_quiz/",
+                aiRequestPayload,
                 {
-                    language: quiz.language,
-                    level: generateAIQuestionsDto.difficulty,
-                    pdf_path: generateAIQuestionsDto.filePath,
-                    n_questions: generateAIQuestionsDto.noOfFocusQuestions + (generateAIQuestionsDto.noOfRemainQuestions ?? 0),
-                    f_mcq_ratio: generateAIQuestionsDto.mcqFocusRatio! / 100,
-                    f_tf_ratio: generateAIQuestionsDto.tfFocusRatio! / 100,
-                    f_written_ratio: generateAIQuestionsDto.writtenFocusRatio! / 100,
-                    r_mcq_ratio: generateAIQuestionsDto.mcqRemainRatio ? generateAIQuestionsDto.mcqRemainRatio / 100 : null,
-                    r_tf_ratio: generateAIQuestionsDto.tfRemainRatio ? generateAIQuestionsDto.tfRemainRatio / 100 : null,
-                    r_written_ratio: generateAIQuestionsDto.writtenRemainRatio ? generateAIQuestionsDto.writtenRemainRatio / 100 : null,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    timeout: 60000 // 60 seconds timeout
                 }
-
             );
         } catch (error) {
-            throw new ForbiddenException('Failed to generate AI questions: ' + (error?.response?.data?.message || error.message));
+            Logger.error('AI API Error:', error?.response?.data || error.message);
+            throw new ForbiddenException(
+                'Failed to generate AI questions: ' +
+                (error?.response?.data?.message || error?.response?.data || error.message)
+            );
         }
-        Logger.debug(response.data);
+
+        Logger.debug('AI Response:', JSON.stringify(response.data, null, 2));
 
         const dtos = response.data;
 
+        // Validate response format
+        if (!Array.isArray(dtos)) {
+            throw new BadRequestException('Invalid response format from AI service');
+        }
+
+        // Validate each question DTO
         for (const questionDto of dtos) {
-            // const errors = await validate(CreateQuestionDto, questionDto);
-            // if (errors.length > 0) {
-            //     throw new BadRequestException('Invalid question data');
-            // }
             this.validateQuestionOptions(questionDto);
         }
 
-        //put score for every type
+        // Assign scores based on question type
         for (const questionDto of dtos) {
             if (questionDto.type === QuestionType.MCQ) {
                 questionDto.score = 1;
@@ -303,23 +350,21 @@ export class QuizService {
             }
         }
 
-
+        // Create questions in database
         let result = await this.prisma.question.createMany({
-
-            data: dtos.map((questionDto) => (
-
-                {
-                    ...questionDto,
-                    createdById: userId,
-                    quizId,
-
-                    mode: QuestionMode.AI
-                }))
+            data: dtos.map((questionDto) => ({
+                ...questionDto,
+                createdById: userId,
+                quizId,
+                mode: QuestionMode.AI
+            }))
         });
 
         return {
             message: `Successfully added ${result.count} questions to the quiz.`,
             addedQuestions: result.count,
+            totalFocusQuestions: generateAIQuestionsDto.noOfFocusQuestions,
+            totalRemainQuestions: generateAIQuestionsDto.noOfRemainQuestions || 0
         };
     }
 
