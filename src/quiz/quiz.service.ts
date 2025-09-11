@@ -18,7 +18,7 @@ import { ConfigService } from '@nestjs/config';
 export class QuizService {
     constructor(private prisma: PrismaService, private notifications: NotificationService,
         private readonly notificationGateway: NotificationGateway,
-        private readonly config: ConfigService
+        private readonly config : ConfigService
         // private readonly http: HttpService,
     ) { }
 
@@ -288,19 +288,15 @@ export class QuizService {
             f_tf_ratio: generateAIQuestionsDto.tfFocusRatio,
             f_written_ratio: generateAIQuestionsDto.writtenFocusRatio
         };
-        const normalizeRatio = (value: number) => value > 1 ? value / 100 : value;
-
-        aiRequestPayload.f_mcq_ratio = normalizeRatio(generateAIQuestionsDto.mcqFocusRatio);
-        aiRequestPayload.f_tf_ratio = normalizeRatio(generateAIQuestionsDto.tfFocusRatio);
-        aiRequestPayload.f_written_ratio = normalizeRatio(generateAIQuestionsDto.writtenFocusRatio);
+        
 
         // Add remain questions data if provided
         if (generateAIQuestionsDto.noOfRemainQuestions && generateAIQuestionsDto.noOfRemainQuestions > 0) {
-            aiRequestPayload.n_remain = generateAIQuestionsDto.noOfRemainQuestions;
+            aiRequestPayload.n_remain = generateAIQuestionsDto.noOfRemainQuestions ;
             aiRequestPayload.remain_pages = generateAIQuestionsDto.remainPages;
-            aiRequestPayload.r_mcq_ratio = normalizeRatio(generateAIQuestionsDto.mcqRemainRatio!);
-            aiRequestPayload.r_tf_ratio = normalizeRatio(generateAIQuestionsDto.tfRemainRatio!);
-            aiRequestPayload.r_written_ratio = normalizeRatio(generateAIQuestionsDto.writtenRemainRatio!);
+            aiRequestPayload.r_mcq_ratio = generateAIQuestionsDto.mcqRemainRatio;
+            aiRequestPayload.r_tf_ratio = generateAIQuestionsDto.tfRemainRatio;
+            aiRequestPayload.r_written_ratio = generateAIQuestionsDto.writtenRemainRatio;
         }
 
         let response;
