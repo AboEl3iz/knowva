@@ -291,13 +291,13 @@ export class QuizService {
         
 
         // Add remain questions data if provided
-        if (generateAIQuestionsDto.noOfRemainQuestions && generateAIQuestionsDto.noOfRemainQuestions > 0) {
+        // if (generateAIQuestionsDto.noOfRemainQuestions && generateAIQuestionsDto.noOfRemainQuestions > 0) {
             aiRequestPayload.n_remain = generateAIQuestionsDto.noOfRemainQuestions ;
             aiRequestPayload.remain_pages = generateAIQuestionsDto.remainPages;
             aiRequestPayload.r_mcq_ratio = generateAIQuestionsDto.mcqRemainRatio;
             aiRequestPayload.r_tf_ratio = generateAIQuestionsDto.tfRemainRatio;
             aiRequestPayload.r_written_ratio = generateAIQuestionsDto.writtenRemainRatio;
-        }
+        // }
 
         let response;
         try {
