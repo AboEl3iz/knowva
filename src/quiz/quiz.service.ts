@@ -242,7 +242,7 @@ export class QuizService {
 
                     tx.question.create({
                         data: {
-                            score : dto.score! ,
+                            score: dto.score!,
                             quizId: quiz.id,
                             ...dto,
                             createdById: userId,
@@ -269,39 +269,30 @@ export class QuizService {
         });
     }
 
-    async addAiQuestionsToQuiz(userId: number, quizId: number, generateAIQuestionsDto: GenerateAIQuestionsDto) {
+    async addAiQuestionsToQuiz(
+        userId: number,
+        quizId: number,
+        generateAIQuestionsDto: GenerateAIQuestionsDto,
+    ) {
+        // 1. تحقق من وجود الكويز
         const quiz = await this.prisma.quiz.findUnique({
-            where: { id: quizId, createdById: userId }
+            where: { id: quizId, createdById: userId },
         });
 
-        if (!quiz) {
-            throw new BadRequestException('Quiz not found');
-        }
+        if (!quiz) throw new BadRequestException('Quiz not found');
 
-        // Validate that if remain questions are requested, all remain fields are provided
-        // if (generateAIQuestionsDto.noOfRemainQuestions && generateAIQuestionsDto.noOfRemainQuestions > 0) {
-        //     if (!generateAIQuestionsDto.remainPages ||
-        //         generateAIQuestionsDto.mcqRemainRatio === undefined ||
-        //         generateAIQuestionsDto.tfRemainRatio === undefined ||
-        //         generateAIQuestionsDto.writtenRemainRatio === undefined) {
-        //         throw new BadRequestException('If remain questions are requested, remainPages and all remain ratios must be provided');
-        //     }
-        // }
-
-        // Build the AI model request payload
+        // 2. بناء الـ payload للـ AI API
         const aiRequestPayload: any = {
-            language: quiz.language || "en", // Default to English if not set
+            language: quiz.language || 'en',
             level: generateAIQuestionsDto.difficulty,
             pdf_path: generateAIQuestionsDto.pdfPath,
             n_focus: generateAIQuestionsDto.noOfFocusQuestions,
             focus_pages: generateAIQuestionsDto.focusPages,
             f_mcq_ratio: generateAIQuestionsDto.mcqFocusRatio,
             f_tf_ratio: generateAIQuestionsDto.tfFocusRatio,
-            f_written_ratio: generateAIQuestionsDto.writtenFocusRatio
+            f_written_ratio: generateAIQuestionsDto.writtenFocusRatio,
         };
 
-
-        // Add remain questions data if provided
         if (generateAIQuestionsDto.noOfRemainQuestions && generateAIQuestionsDto.noOfRemainQuestions > 0) {
             aiRequestPayload.n_remain = generateAIQuestionsDto.noOfRemainQuestions;
             aiRequestPayload.remain_pages = generateAIQuestionsDto.remainPages;
@@ -310,25 +301,20 @@ export class QuizService {
             aiRequestPayload.r_written_ratio = generateAIQuestionsDto.writtenRemainRatio;
         }
 
+        // 3. استدعاء الـ AI API
         let response;
         try {
             Logger.debug('AI Request Payload:', JSON.stringify(aiRequestPayload, null, 2));
-
             response = await axios.post(
-                "https://8080-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/generate_quiz/",
+                'https://8080-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/generate_quiz/',
                 aiRequestPayload,
-                {
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-
-                }
+                { headers: { 'Content-Type': 'application/json' }, timeout: 60000 },
             );
         } catch (error) {
             Logger.error('AI API Error:', error?.response?.data || error.message);
             throw new ForbiddenException(
                 'Failed to generate AI questions: ' +
-                (error?.response?.data?.message || error?.response?.data || error.message)
+                (error?.response?.data?.message || error?.response?.data || error.message),
             );
         }
 
@@ -336,42 +322,43 @@ export class QuizService {
 
         const dtos = response.data;
 
-        // Validate response format
+        // 4. التحقق من شكل الـ response
         if (!Array.isArray(dtos)) {
             throw new BadRequestException('Invalid response format from AI service');
         }
 
-        // Validate each question DTO
+        // 5. تنظيف البيانات + إعطاء score
         for (const questionDto of dtos) {
-            this.validateQuestionOptions(questionDto);
-        }
+            questionDto.question = questionDto.question?.trim();
+            questionDto.answer = questionDto.answer?.trim();
 
-        // Assign scores based on question type
-        for (const questionDto of dtos) {
             if (questionDto.type === QuestionType.MCQ) {
                 questionDto.score = 1;
             } else if (questionDto.type === QuestionType.TrueFalse) {
                 questionDto.score = 2;
             } else if (questionDto.type === QuestionType.Written) {
                 questionDto.score = 3;
+            } else {
+                questionDto.score = 1; // default fallback
             }
         }
 
-        // Create questions in database
-        let result = await this.prisma.question.createMany({
-            data: dtos.map((questionDto) => ({
-                ...questionDto,
+        // 6. تخزين البيانات في DB
+        const result = await this.prisma.question.createMany({
+            data: dtos.map((q) => ({
+                ...q,
                 createdById: userId,
                 quizId,
-                mode: QuestionMode.AI
-            }))
+                mode: QuestionMode.AI,
+            })),
         });
 
+        // 7. إرجاع النتيجة
         return {
             message: `Successfully added ${result.count} questions to the quiz.`,
             addedQuestions: result.count,
             totalFocusQuestions: generateAIQuestionsDto.noOfFocusQuestions,
-            totalRemainQuestions: generateAIQuestionsDto.noOfRemainQuestions || 0
+            totalRemainQuestions: generateAIQuestionsDto.noOfRemainQuestions || 0,
         };
     }
 
