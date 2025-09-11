@@ -121,6 +121,24 @@ export class QuizController {
         return await this.quizService.duplicateQuiz(id, req.user.id);
     }
 
+
+    @Delete(':id')
+    @Roles(Role.TEACHER)
+    @ApiOperation({ summary: 'Delete a quiz' })
+    @ApiParam({ name: 'id', description: 'Quiz ID to delete' })
+    @ApiResponse({ status: 204, description: 'Quiz deleted successfully' })
+    @ApiResponse({ status: 400, description: 'Only draft quizzes can be deleted' })
+    @ApiResponse({ status: 404, description: 'Quiz not found' })
+    /**
+     * Deletes a quiz for the authenticated teacher
+     *
+     * @param id The ID of the quiz to delete
+     * @returns A success message
+     */
+    async deleteQuiz(@Param('id', ParseIntPipe) id: number, @Request() req) {
+        return await this.quizService.deleteQuiz(id, req.user.id);
+    }
+
     // Question Management Endpoints
     @Get('questions/all')
     @Roles(Role.TEACHER)

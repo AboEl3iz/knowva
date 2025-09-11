@@ -189,6 +189,17 @@ export class QuizService {
         return newQuiz;
     }
 
+    async deleteQuiz(id: number, userId: number) {
+        const quiz = await this.prisma.quiz.findUnique({ where: { id, createdById: userId } });
+        if (!quiz) throw new BadRequestException('Quiz not found');
+
+        if (quiz.status !== 'DRAFT') throw new BadRequestException('Only draft quizzes can be deleted');
+
+        await this.prisma.quiz.delete({ where: { id } }); // join records also will be deleted
+
+        return "Quiz deleted successfully";
+    }
+
     async getQuestions(userId: number) {
         return await this.prisma.question.findMany({ where: { createdById: userId } });
     }
