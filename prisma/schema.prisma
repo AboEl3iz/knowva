@@ -317,6 +317,7 @@ model QuestionFeedback {
   questionAnswerId  Int
   attemptFeedback   AttemptFeedback @relation(fields: [attemptFeedbackId], references: [id])
   attemptFeedbackId Int
+   feedback          String   // 👈 ده اللي ناقص
 }
 
 model StudentFeedback {
@@ -341,6 +342,7 @@ model StudentFeedback {
   createdAt              DateTime @default(now())
   User                   User?    @relation(fields: [userId], references: [id])
   userId                 Int?
+  @@unique([studentId, teacherId])  // ✅ هنا
 }
 
 model Conversation {

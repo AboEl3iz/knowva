@@ -449,6 +449,14 @@ export class QuizController {
         return await this.quizService.requestFeedbackStudent(req.user.id, id);
     }
 
+    @Get(':groupId/request-feedback')
+    async getGroupFeedback(
+        @Param('groupId') groupId: number,
+        @Query('feedback_language') feedback_language: string = 'en',
+    ) {
+        return this.quizService.requestGroupFeedback(groupId, feedback_language);
+    }
+
     @Get('feedback/teacher/:studentId')
     @Roles(Role.TEACHER)
     @ApiOperation({ summary: 'Get teacher feedback requests for a student' })

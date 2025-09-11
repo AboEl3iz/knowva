@@ -818,63 +818,71 @@ export class QuizService {
                 attempts: {
                     include: {
                         studentAnswers: {
-                            include: { question: true }
-                        }
-                    }
-                }
-            }
+                            include: { question: true },
+                        },
+                    },
+                },
+            },
         });
+
         if (!quiz) {
-            throw new InternalServerErrorException('Quiz not found');
+            throw new NotFoundException('Quiz not found');
         }
 
         let response;
         try {
             response = await axios.post(
-                "https://8080-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/feedback_student",
+                'https://8080-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/feedback_student',
                 quiz.attempts.map((attempt) => ({
-                    "attempt_id": attempt.id,
-                    "questions": attempt.studentAnswers.map((sa) => ({
-                        "answer_id": sa.id,
-                        "question": sa.question.question,
-                        "student_answer": sa.answer,
-                        "correct_answer": sa.question.answer,
-                        "type": sa.question.type,
-                        "options": sa.question.options,
-                        "q_weight": sa.question.score,
-                        "score": sa.score
-                    }))
-                }))
+                    attempt_id: attempt.id.toString(),
+                    answers: attempt.studentAnswers.map((sa) => ({
+                        answer_id: sa.id.toString(), // studentAnswer.id
+                        question: sa.question.question,
+                        student_answer: sa.answer,
+                        correct_answer: sa.question.answer,
+                        type: sa.question.type,
+                        options: sa.question.options,
+                        is_correct: sa.question.answer === sa.answer,
+                        q_weight: sa.question.score,
+                        score: sa.score,
+                    })),
+                })),
             );
-        }
-        catch (error) {
-            throw new InternalServerErrorException(error.message);
+            Logger.debug(response.data);
+        } catch (error) {
+            throw new BadRequestException(error.message);
         }
 
         const attempts = response.data;
 
         for (const attempt of attempts) {
-            const dtos: StudentFeedbackDto[] = attempt.results.map((dto) => ({
-                answerId: dto.answer_id,
-                feedback: dto.feedback
-            }))
+            // 1️⃣ أنشئ AttemptFeedback
+            const attemptFeedback = await this.prisma.attemptFeedback.create({
+                data: {
+                    attemptId: parseInt(attempt.attempt_id, 10),
+                    summary: attempt.summary ?? "No summary",
+                    weakPoints: attempt.weak_points ?? [],
+                    goodPoints: attempt.good_points ?? [],
+                },
+            });
 
-            for (const dto of dtos) {
-                // const errors = await validate(dto);
-                // if (errors.length > 0) {
-                //     throw new InternalServerErrorException('Invalid question data');
-                // }
-                this.validateQuestionOptions(dto);
-            }
+            // 2️⃣ جهّز الداتا الخاصة بالـ QuestionFeedback
+            const data = attempt.results.map((result) => ({
+                questionAnswerId: parseInt(result.answer_id, 10),
+                feedback: result.feedback,
+                attemptFeedbackId: attemptFeedback.id,
+            }));
+
+            // 3️⃣ خزّن كل QuestionFeedback
+            await this.prisma.questionFeedback.createMany({ data });
         }
 
-       return await this.prisma.questionFeedback.createMany({
-            data: attempts.flatMap((attempt) => attempt.results.map((result) => ({
-                answerId: result.answer_id,
-                feedback: result.feedback
-            })))
-        });
+        return { message: "Feedback stored successfully" };
     }
+
+
+
+
 
     async getRequestedFeedbackTeacher(userId: number, studentId: number) {
         return await this.prisma.studentFeedback.findMany({ where: { teacherId: userId, studentId } });
@@ -886,39 +894,48 @@ export class QuizService {
             include: {
                 quizAttempts: {
                     include: {
-                        studentAnswers: {
-                            include: { question: true }
-                        },
-                        feedback: true
-                    }
-                }
-            }
-        })
+                        studentAnswers: { include: { question: true } },
+                        feedback: true,
+                    },
+                    orderBy: { createdAt: 'asc' }, // كل الامتحانات حسب الوقت
+                },
+            },
+        });
 
         if (!student) {
             throw new InternalServerErrorException('Student not found');
         }
 
+        if (!student.quizAttempts || student.quizAttempts.length === 0) {
+            throw new BadRequestException('Student has no quiz attempts');
+        }
+
+
+        const apiPayload = {
+            student_id: studentId.toString(),
+            history: student.quizAttempts.map((attempt) => ({
+                attempt_id: attempt.id.toString(),
+                score: attempt.score ?? 0,
+                max_score: attempt.studentAnswers.reduce(
+                    (acc, sa) => acc + (sa.question.score ?? 0),
+                    0
+                ),
+                strong_points: attempt.feedback?.goodPoints ?? [],
+                weak_points: attempt.feedback?.weakPoints ?? [],
+            })),
+        };
+
         let response;
         try {
             response = await axios.post(
-                "https://8000-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/feedback_teacher",
-                {
-                    "student_id": studentId,
-                    "latest_score": student.quizAttempts[0].score,
-                    "summary": student.quizAttempts[0].feedback?.summary,
-                    "good_points": student.quizAttempts[0].feedback?.goodPoints,
-                    "weak_points": student.quizAttempts[0].feedback?.weakPoints,
-                    "history": student.quizAttempts.map((attempt) => ({
-                        "student_id": studentId,
-                        "score": attempt.score,
-                        "strong_points": attempt.feedback?.goodPoints,
-                        "weak_points": attempt.feedback?.weakPoints
-                    }))
-                }
+                'https://8080-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/feedback_teacher',
+                apiPayload
             );
-        } catch (error) {
-            throw new InternalServerErrorException('Failed to generate teacher feedback: ' + (error?.response?.data?.message || error.message));
+        } catch (error: any) {
+            throw new InternalServerErrorException(
+                'Failed to generate teacher feedback: ' +
+                (error?.response?.data?.message || error.message)
+            );
         }
 
         const data = response.data;
@@ -927,18 +944,122 @@ export class QuizService {
             data: {
                 studentId,
                 teacherId: userId,
-                progress: data.progress,
-                summaryFeedback: data.summary_feedback,
-                strongPoints: data.strong_points,
-                weakPoints: data.weak_points,
-                improvedPoints: data.improved_points,
-                declinedPoints: data.declined_points,
-                unchangedPoints: data.unchanged_points,
-                scoreTrend: data.score_trend,
-                riskLevel: data.risk_level,
-                teachingRecommendation: data.teaching_recommendation
-            }
+                progress: data.progress ?? '',
+                summaryFeedback: data.summary_feedback ?? '',
+                strongPoints: data.strong_points ?? [],
+                weakPoints: data.weak_points ?? [],
+                improvedPoints: data.improved_points ?? [],
+                declinedPoints: data.declined_points ?? [],
+                unchangedPoints: data.unchanged_points ?? [],
+                scoreTrend: data.score_trend ?? [],
+                riskLevel: data.risk_level ?? 'unknown',
+                teachingRecommendation: data.teaching_recommendation ?? '',
+            },
         });
+    }
+
+    async requestGroupFeedback(groupId: number, feedback_language: string) {
+        // 1️⃣ جلب كل الطلاب في المجموعة وكل امتحاناتهم
+        const group = await this.prisma.group.findUnique({
+            where: { id: groupId },
+            include: {
+                memberships: {
+                    include: {
+                        student: {
+                            include: {
+                                quizAttempts: {
+                                    include: {
+                                        studentAnswers: { include: { question: true } },
+                                        feedback: true,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        if (!group) {
+            throw new InternalServerErrorException('Group not found');
+        }
+
+        // 2️⃣ تجهيز الـ payload للـ AI API
+        const studentFeedbacks = group.memberships.map(({ student }) => {
+            const attempts = student.quizAttempts;
+            if (!attempts || attempts.length === 0) return null;
+
+            const latestAttempt = attempts[attempts.length - 1]; // أحدث attempt
+            const mostWrongQuestions = latestAttempt.studentAnswers
+                .filter((sa) => sa.answer !== sa.question.answer)
+                .map((sa) => sa.question.question);
+
+            const avgScoreThisQuiz = latestAttempt.score ?? 0;
+            const avgScorePrev = attempts.slice(0, -1).map((a) => a.score ?? 0);
+            const successRateThisQuiz =
+                latestAttempt.studentAnswers.length === 0
+                    ? 0
+                    : latestAttempt.studentAnswers.filter((sa) => sa.answer === sa.question.answer).length /
+                    latestAttempt.studentAnswers.length *
+                    100;
+            const successRatePrev = attempts
+                .slice(0, -1)
+                .map(
+                    (a) =>
+                        a.studentAnswers.length === 0
+                            ? 0
+                            : (a.studentAnswers.filter((sa) => sa.answer === sa.question.answer).length /
+                                a.studentAnswers.length) *
+                            100,
+                );
+
+            return {
+                student_id: student.id.toString(),
+                summary: latestAttempt.feedback?.summary ?? '',
+                strengths: latestAttempt.feedback?.goodPoints ?? [],
+                weaknesses: latestAttempt.feedback?.weakPoints ?? [],
+                most_wrong_questions: mostWrongQuestions,
+                avg_score_this_quiz: avgScoreThisQuiz,
+                avg_score_prev: avgScorePrev,
+                success_rate_this_quiz: successRateThisQuiz,
+                success_rate_prev: successRatePrev,
+            };
+        }).filter(Boolean);
+
+        const payload = {
+            most_wrong_questions: studentFeedbacks.flatMap((s: any) => s.most_wrong_questions),
+            avg_score_this_quiz:
+                studentFeedbacks.reduce((acc: number, s: any) => acc + s.avg_score_this_quiz, 0) /
+                studentFeedbacks.length,
+            avg_score_prev: studentFeedbacks.flatMap((s: any) => s.avg_score_prev),
+            success_rate_this_quiz:
+                studentFeedbacks.reduce((acc: number, s: any) => acc + s.success_rate_this_quiz, 0) /
+                studentFeedbacks.length,
+            success_rate_prev: studentFeedbacks.flatMap((s: any) => s.success_rate_prev),
+            individual_feedback: studentFeedbacks.map((s: any) => ({
+                student_id: s.student_id,
+                summary: s.summary,
+                strengths: s.strengths,
+                weaknesses: s.weaknesses,
+            })),
+            format: "json",            // <-- مهم
+            no_templates: true         // <-- تمنع Jinja
+        };
+
+        // 3️⃣ استدعاء AI API
+        let response;
+        try {
+            response = await axios.post(
+                `https://8080-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/group_feedback/?feedback_language=${feedback_language}`,
+                payload,
+            );
+        } catch (error: any) {
+            throw new InternalServerErrorException(
+                'Failed to generate group feedback: ' + (error?.response?.data?.message || error.message),
+            );
+        }
+
+        return response.data;
     }
 
     async finishQuizAttempt(userId: number, quizAttemptId: number) {
