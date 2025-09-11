@@ -270,7 +270,7 @@ export class AuthService {
   if (file) {
     const result   = await this.cloudinaryService.uploadProfileImage(file);
     if (result) {
-      Logger.log(result);
+      
       updatedData.avatar = result.secure_url;
     }
   }

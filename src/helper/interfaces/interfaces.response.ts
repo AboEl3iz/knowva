@@ -84,6 +84,16 @@ interface IGroup {
   createdAt: Date;
 }
 
+interface WrittenQuestionPayload {
+  question_id: string;
+  student_id: string;
+  group_id: string;
+  exam_id: string;
+  question_text: string;
+  correct_answer: string;
+  student_answer: string;
+}
+
 
 interface ISubject {
   id: string;
@@ -107,5 +117,5 @@ interface IMaterial {
 
 export {
   LoginResponse, RegisterResponse, UpdateProfileResponse, ProfileResponse,
-  IUser, IMessage, FlutterUser, IChat, IGroup, ISubject, IMaterial
+  IUser, IMessage, FlutterUser, IChat, IGroup, ISubject, IMaterial,WrittenQuestionPayload
 };

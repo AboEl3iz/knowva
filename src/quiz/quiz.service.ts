@@ -12,6 +12,7 @@ import { QuestionAnswerDto } from './dto/question-answer.dto';
 import { QuestionMode, QuestionType, NotificationType } from '@prisma/client';
 import { NotificationService } from 'src/notification/notification.service';
 import { NotificationGateway } from 'src/notification/notification.gateway';
+import { WrittenQuestionPayload } from 'src/helper/interfaces/interfaces.response';
 @Injectable()
 export class QuizService {
     constructor(private prisma: PrismaService, private notifications: NotificationService,
@@ -321,25 +322,31 @@ export class QuizService {
         };
     }
 
+
     async correctQuiz(userId: number, quizId: number) {
         const attempt = await this.prisma.quizAttempt.findFirst({
+
             where: {
                 quizId,
                 studentId: userId,
             },
+
             include: {
                 quiz: {
+
                     include: {
                         questions: {
+
                             include: {
                                 question: true
                             }
-                        }, // الأسئلة الخاصة بالـ Quiz
+                        },
                     },
                 },
                 studentAnswers: {
+
                     include: {
-                        question: true, // عشان تجيب السؤال مع الإجابة
+                        question: true,
                     },
                 },
             },
@@ -349,7 +356,7 @@ export class QuizService {
             throw new NotFoundException('No attempt found for this student and quiz');
         }
 
-        // نجهز الـ payload
+
         const payload = {
             max_grade: attempt.quiz.questions.reduce((sum, question) => sum + question.question.score, 0),
             questions: attempt.studentAnswers.map((ans) => ({
@@ -366,21 +373,136 @@ export class QuizService {
 
         let response;
         try {
+
             response = await axios.post(
                 "https://8080-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/correct_quiz/",
                 payload,
             );
         } catch (error) {
+
             throw new ForbiddenException(
                 'Failed to correct quiz: ' + (error?.response?.data?.message || error.message),
             );
         }
+
 
         return {
             message: `Successfully corrected quiz ${quizId}.`,
             aiResult: response.data,
         };
     }
+
+    async completeQuizAttempt(quizAttemptId: number, userId: number) {
+        const attempt = await this.prisma.quizAttempt.findFirst({
+            where: { id: quizAttemptId, studentId: userId },
+            include: {
+                studentAnswers: { include: { question: true } }
+            }
+        });
+
+        if (!attempt) {
+            throw new InternalServerErrorException('Quiz attempt not found');
+        }
+
+        let totalScore = 0;
+        const results: any[] = [];
+
+        const writtenPayload: {
+            max_grade: number;
+            questions: WrittenQuestionPayload[];
+        } = {
+            max_grade: 0,
+            questions: [],
+        };
+
+        for (const ans of attempt.studentAnswers) {
+            const q = ans.question;
+
+            if (q.type === "MCQ" || q.type === "TrueFalse") {
+                const score = ans.answer === q.answer ? q.score : 0;
+                totalScore += score;
+
+                await this.prisma.questionAnswer.update({
+                    where: { id: ans.id },
+                    data: { score }
+                });
+
+                results.push({
+                    questionId: q.id,
+                    questionText: q.question,
+                    correctAnswer: q.answer,
+                    studentAnswer: ans.answer,
+                    maxScore: q.score,
+                    studentScore: score,
+                });
+
+            } else if (q.type === "Written") {
+                writtenPayload.max_grade += q.score ?? 0;
+                writtenPayload.questions.push({
+                    question_id: q.id.toString(),
+                    student_id: attempt.studentId.toString(),
+                    group_id: attempt.quizId.toString(),
+                    exam_id: attempt.quizId.toString(),
+                    question_text: q.question,
+                    correct_answer: q.answer,
+                    student_answer: ans.answer,
+                });
+            }
+        }
+
+        if (writtenPayload.questions.length > 0) {
+            try {
+                const aiResponse = await axios.post(
+                    "https://8080-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/correct_quiz/",
+                    writtenPayload
+                );
+
+                for (const q of aiResponse.data) {
+                    const questionId = parseInt(q.question_id);
+                    const questionInDb = attempt.studentAnswers.find(ans => ans.questionId === questionId)?.question;
+
+                    const maxScore = questionInDb?.score ?? 3; // لو مش موجود خلي 3 كافتراضي
+                    const studentScore = q.score ?? 0; // لو محتاج تحويل بالنسبة لـ maxScore: (q.score/100)*maxScore
+
+                    totalScore += studentScore;
+
+                    await this.prisma.questionAnswer.updateMany({
+                        where: {
+                            quizAttemptId: attempt.id,
+                            questionId: questionId,
+                        },
+                        data: { score: studentScore },
+                    });
+
+                    results.push({
+                        questionId: questionId,
+                        questionText: questionInDb?.question ?? q.question_text,
+                        correctAnswer: questionInDb?.answer ?? q.correct_answer,
+                        studentAnswer: q.student_answer,
+                        maxScore: maxScore,
+                        studentScore: studentScore,
+                    });
+                }
+
+            } catch (error) {
+                throw new BadRequestException(
+                    "AI correction failed: " + (error.response?.data?.message || error.message)
+                );
+            }
+        }
+
+        const updatedAttempt = await this.prisma.quizAttempt.update({
+            where: { id: quizAttemptId },
+            data: { score: totalScore, endedAt: new Date() }
+        });
+
+        return {
+            attemptId: updatedAttempt.id,
+            totalScore,
+            results
+        };
+    }
+
 
 
 
@@ -564,10 +686,10 @@ export class QuizService {
 
         // check if student already answered
         for (const questionAnswerDto of questionAnswerDtos) {
-            const errors = await validate(questionAnswerDto);
-            if (errors.length > 0) {
-                throw new InternalServerErrorException('Invalid question answer data');
-            }
+            // const errors = await validate(questionAnswerDto);
+            // if (errors.length > 0) {
+            //     throw new InternalServerErrorException('Invalid question answer data');
+            // }
             const question = await this.prisma.question.findUnique({ where: { id: questionAnswerDto.questionId } });
             if (!question) throw new BadRequestException('Question not found');
         }
@@ -588,29 +710,7 @@ export class QuizService {
         });
     }
 
-    async completeQuizAttempt(quizAttemptId: number, userId: number) {
-        const attempt = await this.prisma.quizAttempt.findFirst({
-            where: { id: quizAttemptId, studentId: userId },
-            include: {
-                studentAnswers: {
-                    include: { question: true }
-                }
-            }
-        });
 
-        if (!attempt) {
-            throw new InternalServerErrorException('Quiz attempt not found');
-        }
-
-        // Calculate total score
-        const totalScore = attempt.studentAnswers.reduce((sum, answer) => sum + answer.score, 0);
-        const maxScore = attempt.studentAnswers.reduce((sum, answer) => sum + answer.question.score, 0);
-
-        return await this.prisma.quizAttempt.update({
-            where: { id: quizAttemptId },
-            data: { score: totalScore, endedAt: new Date() }
-        });
-    }
 
     async getAvailableQuizzes(userId: number) {
         return await this.prisma.quiz.findMany({
