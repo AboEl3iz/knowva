@@ -1,48 +1,31 @@
-// group-response.dto.ts
 import { ApiProperty } from '@nestjs/swagger';
-
-class UserResponseDto {
-    @ApiProperty()
-    id: number;
-    @ApiProperty()
-    name: string;
-    @ApiProperty()
-    email: string;
-}
-
-class SubjectResponseDto {
-    @ApiProperty()
-    id: number;
-    @ApiProperty()
-    title: string;
-    @ApiProperty()
-    description: string;
-}
-
-class MembershipResponseDto {
-    @ApiProperty({ type: UserResponseDto })
-    student: UserResponseDto;
-}
+import { StudentInfoDto } from './student-info.dto';
 
 export class GroupResponseDto {
-    @ApiProperty()
-    id: number;
-    @ApiProperty()
-    name: string;
-    @ApiProperty()
-    capacity: number;
-    @ApiProperty()
-    status: string;
-    @ApiProperty()
-    subjectId: number;
-    // ... other properties
+  @ApiProperty({ example: '123' })
+  id: string;
 
-    @ApiProperty({ type: [MembershipResponseDto] })
-    memberships: MembershipResponseDto[];
+  @ApiProperty({ example: 'Math 101 Group' })
+  name: string;
 
-    @ApiProperty({ type: SubjectResponseDto })
-    subject: SubjectResponseDto;
+  @ApiProperty({ example: '456' })
+  teacherId: string;
 
-    @ApiProperty({ type: UserResponseDto })
-    createdBy: UserResponseDto;
+  @ApiProperty({ example: '789' })
+  subjectId: string;
+
+  @ApiProperty({ example: '30' })
+  capacity: string;
+
+  @ApiProperty({ type: [StudentInfoDto] })
+  studentIds: StudentInfoDto[];
+
+  @ApiProperty({
+    enum: ['complete', 'active', 'inactive'],
+    example: 'active',
+  })
+  status: 'complete' | 'active' | 'inactive';
+
+  @ApiProperty({ example: '2025-09-12T10:00:00.000Z' })
+  createdAt: Date;
 }

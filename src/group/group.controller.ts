@@ -6,14 +6,17 @@ import { AuthenticationGuard } from 'src/guards/authentication.guard';
 import { AuthorizationGuard } from 'src/guards/authorization.guard';
 import { Roles } from 'src/decorator/decorator/roles.decorator';
 import { Role } from 'src/decorator/enums/roles';
-import { ApiForbiddenResponse, ApiOkResponse, ApiOperation, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiForbiddenResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { GroupResponseDto } from './dto/group-response.dto';
 
 @Controller('group')
+@ApiTags('Group')
+@ApiBearerAuth()
 export class GroupController {
   constructor(private readonly groupService: GroupService) { }
 
   @Post('create/:subjectId')
+  @ApiOperation({ summary: 'Create a new group' })
   @Roles(Role.TEACHER)
   @UseGuards(AuthenticationGuard, AuthorizationGuard)
   /**
@@ -27,6 +30,7 @@ export class GroupController {
   }
 
   @Get('all/:subjectId')
+  @ApiOperation({ summary: 'Get all groups for a subject' })
   /**
    * Retrieves all groups for the given subject id
    * @param subjectId the id of the subject to find groups for
@@ -37,6 +41,7 @@ export class GroupController {
   }
 
   @Get('all-by-teacher/:teacherId')
+  @ApiOperation({ summary: 'Get all groups for a teacher' })
   /**
    * Retrieves all groups for the given teacher id
    * @param teacherId the id of the teacher to find groups for
@@ -47,6 +52,7 @@ export class GroupController {
   }
 
   @Get('details/:id')
+  @ApiOperation({ summary: 'Get details of a group' })
   /**
    * Retrieves a single group by its id
    * @param id the id of the group to retrieve
@@ -59,6 +65,7 @@ export class GroupController {
   @Patch(':id')
   @Roles(Role.TEACHER)
   @UseGuards(AuthenticationGuard, AuthorizationGuard)
+  @ApiOperation({ summary: 'Update a group' })
   /**
    * Updates a single group by its id
    * @param id the id of the group to update
@@ -71,6 +78,7 @@ export class GroupController {
   }
 
   @Delete(':id')
+  @ApiOperation({ summary: 'Delete a group' })
   @Roles(Role.TEACHER)
   @UseGuards(AuthenticationGuard, AuthorizationGuard)
 
@@ -87,6 +95,14 @@ export class GroupController {
   @Patch('complete/:id')
   @Roles(Role.TEACHER)
   @UseGuards(AuthenticationGuard, AuthorizationGuard)
+  @ApiOperation({ summary: 'Mark a group as complete' })
+   @ApiOkResponse({
+   
+    type: GroupResponseDto,
+    isArray: true,
+  })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  @ApiForbiddenResponse({ description: 'Forbidden' })
   /**
    * Marks a group as complete by its id
    * @param id the id of the group to mark as complete
