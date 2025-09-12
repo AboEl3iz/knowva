@@ -9,6 +9,7 @@ import { validate } from 'class-validator';
 import axios from 'axios';
 import { StudentFeedbackDto } from './dto/student-feedback.dto';
 import { QuestionAnswerDto } from './dto/question-answer.dto';
+import { GroupFeedbackRequestDto } from './dto/group-feedback-request.dto';
 import { QuestionMode, QuestionType, NotificationType } from '@prisma/client';
 import { NotificationService } from 'src/notification/notification.service';
 import { NotificationGateway } from 'src/notification/notification.gateway';
@@ -710,23 +711,121 @@ export class QuizService {
     async getStudentFeedbacks(userId: number) {
         return await this.prisma.quizAttempt.findMany({
             where: { studentId: userId },
-            include: { feedback: true }
+            include: { 
+                feedback: {
+                    include: {
+                        QuestionFeedback: {
+                            include: {
+                                questionAnswer: {
+                                    include: {
+                                        question: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                quiz: {
+                    select: {
+                        id: true,
+                        title: true,
+                        subject: {
+                            select: {
+                                title: true
+                            }
+                        }
+                    }
+                }
+            },
+            orderBy: { createdAt: 'desc' }
         })
     }
 
     //single detailed  feedback
     async getStudentFeedback(userId: number, attemptId: number) {
-        return await this.prisma.quizAttempt.findFirst({
+        const attempt = await this.prisma.quizAttempt.findFirst({
             where: { studentId: userId, id: attemptId },
             include: {
                 feedback: {
                     include: {
-                        QuestionFeedback: true
+                        QuestionFeedback: {
+                            include: {
+                                questionAnswer: {
+                                    include: {
+                                        question: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                quiz: {
+                    select: {
+                        id: true,
+                        title: true,
+                        subject: {
+                            select: {
+                                title: true
+                            }
+                        }
+                    }
+                },
+                studentAnswers: {
+                    include: {
+                        question: true
                     }
                 }
             }
+        });
+
+        if (!attempt) {
+            throw new NotFoundException('Quiz attempt not found');
         }
-        );
+
+        if (!attempt.feedback) {
+            throw new NotFoundException('No feedback available for this quiz attempt');
+        }
+
+        return attempt;
+    }
+
+    // Get all feedback for a student across all quizzes
+    async getAllStudentFeedback(userId: number) {
+        return await this.prisma.quizAttempt.findMany({
+            where: { 
+                studentId: userId,
+                feedback: {
+                    isNot: null
+                }
+            },
+            include: { 
+                feedback: {
+                    include: {
+                        QuestionFeedback: {
+                            include: {
+                                questionAnswer: {
+                                    include: {
+                                        question: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                quiz: {
+                    select: {
+                        id: true,
+                        title: true,
+                        subject: {
+                            select: {
+                                title: true
+                            }
+                        }
+                    }
+                }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
     }
 
     async removeQuestionFromQuiz(userId: number, questionId: number, quizId: number) {
@@ -809,7 +908,7 @@ export class QuizService {
 
 
 
-    getAvailableQuizzes(userId: number) {
+    getAvailableQuizzes(userId: string) {
         return this.prisma.quiz.findMany({
             where: {
                 isActive: true,
@@ -818,7 +917,7 @@ export class QuizService {
                 group: {
                     memberships: {
                         some: {
-                            studentId: userId,
+                            studentId: parseInt(userId, 10),
                             status: 'APPROVED'
                         }
                     }
@@ -1087,34 +1186,53 @@ export class QuizService {
             };
         }).filter(Boolean) as any[];
 
-        const payload = {
-            most_wrong_questions: studentFeedbacks.flatMap((s: any) => s.most_wrong_questions),
-            avg_score_this_quiz:
-                studentFeedbacks.reduce((acc: number, s: any) => acc + s.avg_score_this_quiz, 0) /
-                studentFeedbacks.length,
-            avg_score_prev: studentFeedbacks.flatMap((s: any) => s.avg_score_prev),
-            success_rate_this_quiz:
-                studentFeedbacks.reduce((acc: number, s: any) => acc + s.success_rate_this_quiz, 0) /
-                studentFeedbacks.length,
-            success_rate_prev: studentFeedbacks.flatMap((s: any) => s.success_rate_prev),
+        // Validate that we have student feedback data
+        if (studentFeedbacks.length === 0) {
+            throw new InternalServerErrorException('No student feedback data found for this group');
+        }
+
+        const payload: GroupFeedbackRequestDto = {
+            most_wrong_questions: studentFeedbacks.flatMap((s: any) => s.most_wrong_questions || []),
+            avg_score_this_quiz: Number(
+                (studentFeedbacks.reduce((acc: number, s: any) => acc + (s.avg_score_this_quiz || 0), 0) /
+                studentFeedbacks.length).toFixed(2)
+            ),
+            avg_score_prev: studentFeedbacks.flatMap((s: any) => s.avg_score_prev || []).map(score => Number(score)),
+            success_rate_this_quiz: Number(
+                (studentFeedbacks.reduce((acc: number, s: any) => acc + (s.success_rate_this_quiz || 0), 0) /
+                studentFeedbacks.length).toFixed(2)
+            ),
+            success_rate_prev: studentFeedbacks.flatMap((s: any) => s.success_rate_prev || []).map(rate => Number(rate)),
             individual_feedback: studentFeedbacks.map((s: any) => ({
-                student_id: s.student_id,
-                summary: s.summary,
-                strengths: s.strengths,
-                weaknesses: s.weaknesses,
-            })),
-            format: "json",            // <-- مهم
-            no_templates: true         // <-- تمنع Jinja
+                student_id: String(s.student_id || ''),
+                summary: String(s.summary || ''),
+                strengths: Array.isArray(s.strengths) ? s.strengths : [],
+                weaknesses: Array.isArray(s.weaknesses) ? s.weaknesses : [],
+            }))
         };
 
         // 3️⃣ استدعاء AI API
+        console.log('Sending payload to AI API:', JSON.stringify(payload, null, 2));
+        
         let response;
         try {
             response = await axios.post(
                 `https://8080-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/group_feedback/?feedback_language=${feedback_language}`,
                 payload,
+                {
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                }
             );
         } catch (error: any) {
+            console.error('AI API Error:', {
+                status: error?.response?.status,
+                statusText: error?.response?.statusText,
+                data: error?.response?.data,
+                message: error?.message
+            });
+            
             throw new InternalServerErrorException(
                 'Failed to generate group feedback: ' + (error?.response?.data?.message || error.message),
             );

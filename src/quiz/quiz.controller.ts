@@ -26,6 +26,7 @@ import { Roles } from '../decorator/decorator/roles.decorator';
 import { Role } from '../decorator/enums/roles';
 import { GenerateAIQuestionsDto } from './dto/generate-ai-questions.dto';
 import { QuestionAnswerDto } from './dto/question-answer.dto';
+import { StudentFeedbackResponseDto } from './dto/student-feedback-response.dto';
 
 @ApiTags('Quiz')
 @Controller('quiz')
@@ -451,8 +452,13 @@ export class QuizController {
      *
      * @returns The available quizzes
      */
-    async getAvailableQuizzes(@Request() req) {
-        return await this.quizService.getAvailableQuizzes(req.user.id);
+     getAvailableQuizzes(@Req() req : any) {
+
+        console.log('req.user:', req.user);
+        console.log('req.user.id:', req.user.id);
+        console.log('typeof req.user.id:', typeof req.user.id);
+        console.log('converted:', +req.user.id);
+        return  this.quizService.getAvailableQuizzes(req.user.id);
     }
 
 
@@ -513,8 +519,49 @@ export class QuizController {
         return this.quizService.requestGroupFeedback(groupId, feedback_language);
     }
 
+    // Student endpoints for viewing their own feedback
+    @Get('student/feedback/:attemptId')
+    @Roles(Role.STUDENT)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
+    @ApiOperation({ summary: 'Get detailed feedback for a specific quiz attempt (Student)' })
+    @ApiParam({ name: 'attemptId', description: 'Quiz Attempt ID' })
+    @ApiResponse({
+        status: 200,
+        description: 'Student feedback retrieved successfully',
+        type: StudentFeedbackResponseDto
+    })
+    @ApiResponse({ status: 404, description: 'Quiz attempt not found or no feedback available' })
+    /**
+     * Retrieves detailed feedback for a specific quiz attempt for the authenticated student
+     *
+     * @param attemptId The ID of the quiz attempt to retrieve feedback for
+     * @returns The detailed student feedback including question-level feedback
+     */
+    async getStudentFeedback(@Param('attemptId', ParseIntPipe) attemptId: number, @Request() req) {
+        return await this.quizService.getStudentFeedback(req.user.id, attemptId);
+    }
+
+    @Get('student/feedback')
+    @Roles(Role.STUDENT)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
+    @ApiOperation({ summary: 'Get all feedback for the authenticated student' })
+    @ApiResponse({
+        status: 200,
+        description: 'All student feedback retrieved successfully',
+        type: [StudentFeedbackResponseDto]
+    })
+    /**
+     * Retrieves all feedback for the authenticated student across all quizzes
+     *
+     * @returns All student feedback with quiz information
+     */
+    async getAllStudentFeedback(@Request() req) {
+        return await this.quizService.getAllStudentFeedback(req.user.id);
+    }
+
     @Get('feedback/teacher/:studentId')
     @Roles(Role.TEACHER)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiResponse({
         status: 200,
         description: 'Teacher feedback requests for a student retrieved successfully',
@@ -585,18 +632,20 @@ export class QuizController {
     //update status quiz
     @Put(':id/status')
     @Roles(Role.TEACHER)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Update quiz status' })
     @ApiParam({ name: 'id', description: 'Quiz ID' })
     // @ApiBody({ type:  UpdateQuizDto  })
     @ApiResponse({ status: 200, description: 'Quiz status updated successfully' })
     @ApiResponse({ status: 404, description: 'Quiz not found' })
     async updateQuizStatus(@Param('id', ParseIntPipe) id: number, @Body() updateQuizDto: { status: 'DRAFT' | 'PUBLIC' }, @Request() req) {
-        return await this.quizService.updateQuizStatus(id, req.user.id, updateQuizDto.status);
+        return await this.quizService.updateQuizStatus(id, +req.user.id, updateQuizDto.status);
     }
 
 
     @Get(':quizId/correct')
     @Roles(Role.TEACHER)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     async correctQuiz(
         @Req() req: any,
         @Param('quizId', ParseIntPipe) quizId: number,
