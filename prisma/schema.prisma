@@ -61,6 +61,8 @@ model User {
   teacherRequestedFeedbacks StudentFeedback[] @relation("TeacherFeedbacks")
   StudentFeedback           StudentFeedback[]
   Lesson                    Lesson[]
+
+  chatbotSessions ChatbotSession[]
 }
 
 enum Gender {
@@ -125,16 +127,18 @@ model Group {
   createdAt    DateTime       @default(now())
   token        String         @unique
   quizzes      Quiz[]
+
+  chatbotSessions ChatbotSession[]
 }
 
 model Membership {
-  id        Int    @id @default(autoincrement())
-  status    Status @default(PENDING)
-  student   User   @relation(fields: [studentId], references: [id])
+  id        Int      @id @default(autoincrement())
+  status    Status   @default(PENDING)
+  student   User     @relation(fields: [studentId], references: [id])
   studentId Int
-  group     Group  @relation(fields: [groupId], references: [id])
+  group     Group    @relation(fields: [groupId], references: [id])
   groupId   Int
-  createdAt    DateTime       @default(now())
+  createdAt DateTime @default(now())
 }
 
 enum Status {
@@ -318,7 +322,7 @@ model QuestionFeedback {
   questionAnswerId  Int
   attemptFeedback   AttemptFeedback @relation(fields: [attemptFeedbackId], references: [id])
   attemptFeedbackId Int
-   feedback          String   // 👈 ده اللي ناقص
+  feedback          String // 👈 ده اللي ناقص
 }
 
 model StudentFeedback {
@@ -343,7 +347,8 @@ model StudentFeedback {
   createdAt              DateTime @default(now())
   User                   User?    @relation(fields: [userId], references: [id])
   userId                 Int?
-  @@unique([studentId, teacherId])  // ✅ هنا
+
+  @@unique([studentId, teacherId]) // ✅ هنا
 }
 
 model Conversation {
@@ -414,4 +419,24 @@ model Notification {
   type      NotificationType @default(GENERAL)
   read      Boolean          @default(false)
   createdAt DateTime         @default(now())
+}
+
+model ChatbotSession {
+  id        Int      @id @default(autoincrement())
+  group     Group    @relation(fields: [groupId], references: [id])
+  groupId   Int
+  student   User     @relation(fields: [studentId], references: [id])
+  studentId Int
+  createdAt DateTime @default(now())
+
+  messages ChatbotMessage[]
+}
+
+model ChatbotMessage {
+  id          Int            @id @default(autoincrement())
+  text        String
+  session     ChatbotSession @relation(fields: [sessionId], references: [id])
+  sessionId   Int
+  aiGenerated Boolean
+  createdAt   DateTime       @default(now())
 }
