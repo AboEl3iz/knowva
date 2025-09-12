@@ -316,7 +316,7 @@ export class GroupService {
     return { message: "Group deleted successfully" };
   }
 
-  async findAllByStudent(studentId : number) {
+  async findAllByStudent(studentId : number) : Promise<IGroup[]> {
     let groups = await this.prisma.group.findMany({
       where: {
         memberships: {
@@ -337,6 +337,35 @@ export class GroupService {
         createdBy: { select: { id: true, name: true, email: true } },
       },
     });
-    return groups;
+  return groups.map((group) => {
+      let status: "complete" | "active" | "inactive";
+      switch (group.status) {
+        case 'COMPLETED':
+          status = 'complete';
+          break;
+        case 'INACTIVE':
+          status = 'inactive';
+          break;
+        default:
+          status = 'active';
+      }
+
+      return {
+        id: group.id.toString(),
+        name: group.name,
+        teacherId: group.createdById.toString(),
+        subjectId: group.subject.id.toString(),
+        capacity: group.capacity.toString(),
+        studentIds: group.memberships.map((m) => {
+          return {
+            id: m.student.id.toString(),
+            name: m.student.name,
+            email: m.student.email,
+          };
+        }),
+        status,
+        createdAt: group.createdAt,
+      };
+    });
   }
 }
