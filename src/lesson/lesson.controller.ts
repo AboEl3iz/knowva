@@ -10,15 +10,18 @@ import { AuthenticationGuard } from 'src/guards/authentication.guard';
 import { AuthorizationGuard } from 'src/guards/authorization.guard';
 import { Roles } from 'src/decorator/decorator/roles.decorator';
 import { Role } from 'src/decorator/enums/roles';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 @Controller('lesson')
+@ApiTags('lesson')
+@ApiBearerAuth()
 export class LessonController {
-  constructor(private readonly lessonService: LessonService) {}
+  constructor(private readonly lessonService: LessonService) { }
 
   @Post('create')
   @Roles(Role.TEACHER)
-  @UseGuards(AuthenticationGuard,AuthorizationGuard)
+  @UseGuards(AuthenticationGuard, AuthorizationGuard)
   @UseInterceptors(
-    FileInterceptor('file'  , {
+    FileInterceptor('file', {
       storage: memoryStorage(),
 
       fileFilter: (req, file, cb) => {
@@ -29,7 +32,9 @@ export class LessonController {
       }
     }),
   )
+  @ApiOperation({ summary: 'Creates a new lesson in the given groups and subject for the current user' })
   
+
   /**
    * Creates a new lesson in the given groups and subject for the current user
    * @param file The file to upload to the lesson
@@ -38,13 +43,14 @@ export class LessonController {
    * @param CreateLessonDto The lesson data to create
    * @returns The created lesson object
    */
-  create(@UploadedFile() file: Express.Multer.File, @Query('subjectId') subjectId: string ,@Query('groupIds') groupIds: string,@Body() CreateLessonDto : CreateLessonDto , @Req() req: any) {
+  create(@UploadedFile() file: Express.Multer.File, @Query('subjectId') subjectId: string, @Query('groupIds') groupIds: string, @Body() CreateLessonDto: CreateLessonDto, @Req() req: any) {
 
     const groupIdArray = groupIds.split(',').map(id => +id.trim()).filter(id => !isNaN(id));
-    return this.lessonService.create(file , CreateLessonDto , +subjectId , groupIdArray , +req.user.id);
+    return this.lessonService.create(file, CreateLessonDto, +subjectId, groupIdArray, +req.user.id);
   }
 
   @Get('for-subject/:subjectId')
+  @ApiOperation({ summary: 'Retrieves all lessons for the given subject id' })
   /**
    * Retrieves all lessons for the given subject id
    * @param subjectId the id of the subject to find lessons for
@@ -55,6 +61,7 @@ export class LessonController {
   }
 
   @Get('for-teacher/:teacherId')
+  @ApiOperation({ summary: 'Retrieves all lessons for the given subject id' })
   /**
    * Retrieves all lessons for the given subject id
    * @param subjectId the id of the subject to find lessons for
@@ -65,6 +72,7 @@ export class LessonController {
   }
 
   @Get(':id')
+  @ApiOperation({ summary: 'Retrieves a single lesson by its id' })
   /**
    * Retrieves a single lesson by its id
    * @param id the id of the lesson to retrieve
@@ -76,7 +84,8 @@ export class LessonController {
 
   @Delete(':id')
   @Roles(Role.TEACHER)
-  @UseGuards(AuthenticationGuard,AuthorizationGuard)
+  @UseGuards(AuthenticationGuard, AuthorizationGuard)
+  @ApiOperation({ summary: 'Deletes a lesson by its id' })
   /**
    * Deletes a lesson by its id
    * @param id the id of the lesson to delete
@@ -115,6 +124,7 @@ export class LessonController {
   // }
 
   @Get('for-group/:groupId')
+  @ApiOperation({ summary: 'Retrieves all lessons for the given group id' })
   /**
    * Retrieves all lessons for the given group id
    * @param groupId the id of the group to find lessons for
@@ -126,7 +136,8 @@ export class LessonController {
 
   @Post(':lessonId/add-to-groups')
   @Roles(Role.TEACHER)
-  @UseGuards(AuthenticationGuard,AuthorizationGuard)
+  @UseGuards(AuthenticationGuard, AuthorizationGuard)
+  @ApiOperation({ summary: 'Add an existing lesson to groups' })
   /**
    * Adds an existing lesson to additional groups
    * @param lessonId The id of the lesson to add to groups
@@ -140,7 +151,8 @@ export class LessonController {
 
   @Delete(':lessonId/remove-from-groups')
   @Roles(Role.TEACHER)
-  @UseGuards(AuthenticationGuard,AuthorizationGuard)
+  @UseGuards(AuthenticationGuard, AuthorizationGuard)
+  @ApiOperation({ summary: 'Remove an existing lesson from groups' })
   /**
    * Removes an existing lesson from specified groups
    * @param lessonId The id of the lesson to remove from groups
@@ -150,5 +162,46 @@ export class LessonController {
   removeLessonFromGroups(@Param('lessonId', ParseIntPipe) lessonId: number, @Query('groupIds') groupIds: string, @Req() req: any) {
     const groupIdArray = groupIds.split(',').map(id => +id.trim()).filter(id => !isNaN(id));
     return this.lessonService.removeLessonFromGroups(lessonId, groupIdArray, req.user.id);
+  }
+
+
+
+  @Get('for-student/all')
+  @Roles(Role.STUDENT)
+  @UseGuards(AuthenticationGuard, AuthorizationGuard)
+  @ApiOperation({ summary: 'Get all lessons for a student' })
+  @ApiResponse({
+    status: 200, example: [
+
+      {
+        "id": "2",
+        "name": "lesson9",
+        "fileUrl": "https://res.cloudinary.com/dqxytabki/raw/upload/v1757704098/lessons/d9hmefewdaozqousty2v_1757704096086",
+        "type": "pdf",
+        "subjectId": "1",
+        "description": "استر يارب",
+        "createdAt": "2025-09-12T19:08:18.374Z",
+        "createdBy": {
+          "id": "3",
+          "name": "teacher1",
+          "email": "teacher1@gmail.com"
+        },
+        "groups": [
+          {
+            "id": "1",
+            "name": "Group6"
+          }
+        ]
+      }
+
+    ]
+  })
+  /**
+   * Retrieves all lessons for the given student id
+   * @param studentId the id of the student to find lessons for
+   * @returns an array of lesson objects
+   */
+  getLessonsForStudent(@Req() req: any) {
+    return this.lessonService.getLessonsForStudent(+req.user.id);
   }
 }

@@ -15,7 +15,7 @@ export class LessonService {
     private readonly cloudinaryService: CloudinaryService,
     private readonly prisma: PrismaService
   ) { }
-  
+
   async create(file: Express.Multer.File, CreateLessonDto: CreateLessonDto, subjectId: number, groupIds: number[], userId: number): Promise<Lesson> {
 
     if (!subjectId) {
@@ -27,7 +27,7 @@ export class LessonService {
     if (!groupIds || groupIds.length === 0) {
       throw new BadRequestException('At least one groupId is required');
     }
-    
+
     let subject = await this.prisma.subject.findUnique({
       where: {
         id: subjectId,
@@ -37,7 +37,7 @@ export class LessonService {
     if (!subject) {
       throw new BadRequestException('Subject not found or not owned by teacher');
     }
-    
+
     // Verify all groups exist
     let groups = await this.prisma.group.findMany({
       where: {
@@ -69,8 +69,8 @@ export class LessonService {
       data: {
         createdById: userId,
         title: CreateLessonDto.title,
-        description : CreateLessonDto.description,
-        url:  result.secure_url,
+        description: CreateLessonDto.description,
+        url: result.secure_url,
         type: type,
         subjectId: subjectId,
         publicId: result.public_id,
@@ -278,7 +278,7 @@ export class LessonService {
     if (!groupIds || groupIds.length === 0) {
       throw new BadRequestException('At least one groupId is required');
     }
-    
+
     // Check if the teacher owns the subject
     let subject = await this.prisma.subject.findUnique({
       where: {
@@ -289,7 +289,7 @@ export class LessonService {
     if (!subject) {
       throw new BadRequestException('Subject not found or you do not have permission to add lessons to this subject');
     }
-    
+
     // Verify all groups exist
     let groups = await this.prisma.group.findMany({
       where: {
@@ -300,7 +300,7 @@ export class LessonService {
       throw new BadRequestException("One or more groups not found");
     }
 
-    const result: UploadApiResponse = await this.cloudinaryService.uploadFile(file).catch((err) => {
+    const result: UploadApiResponse = await this.cloudinaryService.uploadLessonFile(file).catch((err) => {
       console.log(err);
       throw new BadRequestException('Error uploading file');
     });
@@ -338,7 +338,7 @@ export class LessonService {
     });
 
     // Return lesson with groups
-    let   lessonWithGroups = await this.prisma.lesson.findUnique({
+    let lessonWithGroups = await this.prisma.lesson.findUnique({
       where: { id: lesson.id },
       include: {
         groups: {
@@ -401,6 +401,65 @@ export class LessonService {
     }));
   }
 
+  async getLessonsForStudent(studentId: number): Promise<IMaterial[]> {
+    let lessons = await this.prisma.lesson.findMany({
+      where: {
+        groups: {
+          some: {
+            group: {
+              memberships: {
+                some: {
+                  studentId: studentId,
+                  status: 'APPROVED'
+                }
+              }
+            }
+          }
+        }
+      },
+      include: {
+        subject: {
+          select: {
+            title: true,
+            description: true,
+            teacher: { select: { name: true, email: true, id: true } }
+          }
+        },
+        groups: {
+          include: {
+            group: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        }
+      }
+    });
+    return lessons.map((lesson) => {
+      return {
+        id: lesson.id.toString(),
+        name: lesson.title,
+        fileUrl: lesson.url,
+        type: lesson.type,
+        subjectId: lesson.subjectId.toString(),
+        description: lesson.description,
+        createdAt: lesson.createdAt,
+        createdBy: {
+          id: lesson.subject.teacher.id.toString(),
+          name: lesson.subject.teacher.name,
+          email: lesson.subject.teacher.email,
+        },
+        groups: lesson.groups.map(lg => ({
+          id: lg.group.id.toString(),
+          name: lg.group.name
+        }))
+      }
+
+    });
+  }
+
   async addLessonToGroups(lessonId: number, groupIds: number[], userId: number): Promise<Lesson> {
     // Check if lesson exists and user owns the subject
     let lesson = await this.prisma.lesson.findUnique({
@@ -409,15 +468,15 @@ export class LessonService {
         subject: true
       }
     });
-    
+
     if (!lesson) {
       throw new BadRequestException('Lesson not found');
     }
-    
+
     if (lesson.subject.teacherId !== userId) {
       throw new BadRequestException('You do not have permission to modify this lesson');
     }
-    
+
     // Verify all groups exist
     let groups = await this.prisma.group.findMany({
       where: {
@@ -427,7 +486,7 @@ export class LessonService {
     if (groups.length !== groupIds.length) {
       throw new BadRequestException("One or more groups not found");
     }
-    
+
     // Check which groups the lesson is not already assigned to
     let existingGroups = await this.prisma.lessonGroup.findMany({
       where: {
@@ -435,14 +494,14 @@ export class LessonService {
         groupId: { in: groupIds }
       }
     });
-    
+
     let existingGroupIds = existingGroups.map(eg => eg.groupId);
     let newGroupIds = groupIds.filter(gId => !existingGroupIds.includes(gId));
-    
+
     if (newGroupIds.length === 0) {
       throw new BadRequestException('Lesson is already assigned to all specified groups');
     }
-    
+
     // Add lesson to new groups
     await this.prisma.lessonGroup.createMany({
       data: newGroupIds.map(groupId => ({
@@ -450,7 +509,7 @@ export class LessonService {
         groupId: groupId
       }))
     });
-    
+
     // Return updated lesson
     let lessonWithGroups = await this.prisma.lesson.findUnique({
       where: { id: lessonId },
@@ -462,7 +521,7 @@ export class LessonService {
         }
       }
     });
-    
+
     return lessonWithGroups!;
   }
 
@@ -474,15 +533,15 @@ export class LessonService {
         subject: true
       }
     });
-    
+
     if (!lesson) {
       throw new BadRequestException('Lesson not found');
     }
-    
+
     if (lesson.subject.teacherId !== userId) {
       throw new BadRequestException('You do not have permission to modify this lesson');
     }
-    
+
     // Remove lesson from specified groups
     await this.prisma.lessonGroup.deleteMany({
       where: {
@@ -490,7 +549,7 @@ export class LessonService {
         groupId: { in: groupIds }
       }
     });
-    
+
     // Return updated lesson
     let lessonWithGroups = await this.prisma.lesson.findUnique({
       where: { id: lessonId },
@@ -502,7 +561,7 @@ export class LessonService {
         }
       }
     });
-    
+
     return lessonWithGroups!;
   }
 }
