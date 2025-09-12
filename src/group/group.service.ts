@@ -278,6 +278,7 @@ export class GroupService {
       }),
       status,
       createdAt: group.createdAt,
+      token : group.token
     };
   }
 

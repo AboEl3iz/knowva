@@ -455,7 +455,7 @@ export class QuizController {
         return await this.quizService.getAvailableQuizzes(req.user.id);
     }
 
-    
+
 
     @Post(':id/request-feedback')
     @Roles(Role.TEACHER)
@@ -534,7 +534,7 @@ export class QuizController {
         return await this.quizService.updateQuizStatus(id, req.user.id, updateQuizDto.status);
     }
 
-  
+
     @Get(':quizId/correct')
     @Roles(Role.TEACHER)
     async correctQuiz(

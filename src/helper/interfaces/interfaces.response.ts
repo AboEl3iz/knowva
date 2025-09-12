@@ -82,6 +82,7 @@ interface IGroup {
   studentIds: FlutterUser[];
   status: "complete" | "active" | "inactive"; // restrict to enum-like values
   createdAt: Date;
+  token?: string;
 }
 
 interface WrittenQuestionPayload {

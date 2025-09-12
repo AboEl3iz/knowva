@@ -787,8 +787,8 @@ export class QuizService {
 
 
 
-    async getAvailableQuizzes(userId: number) {
-        return await this.prisma.quiz.findMany({
+     getAvailableQuizzes(userId: number) {
+        return  this.prisma.quiz.findMany({
             where: {
                 isActive: true,
                 startsAt: { lte: new Date() },
