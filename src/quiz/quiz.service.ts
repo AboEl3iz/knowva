@@ -495,8 +495,19 @@ export class QuizService {
             const q = ans.question;
 
             if (q.type === "MCQ" || q.type === "TrueFalse") {
-                const score = ans.answer === q.answer ? q.score : 0;
+                const isCorrect = ans.answer === q.answer;
+                const score = isCorrect ? q.score : 0;
                 totalScore += score;
+
+                console.log(`MCQ/TrueFalse question ${q.id} scoring:`, {
+                    questionId: q.id,
+                    questionText: q.question,
+                    correctAnswer: q.answer,
+                    studentAnswer: ans.answer,
+                    isCorrect,
+                    maxScore: q.score,
+                    studentScore: score
+                });
 
                 await this.prisma.questionAnswer.update({
                     where: { id: ans.id },
@@ -537,8 +548,30 @@ export class QuizService {
                     const questionId = parseInt(q.question_id);
                     const questionInDb = attempt.studentAnswers.find(ans => ans.questionId === questionId)?.question;
 
-                    const maxScore = questionInDb?.score ?? 3; // لو مش موجود خلي 3 كافتراضي
-                    const studentScore = q.score ?? 0; // لو محتاج تحويل بالنسبة لـ maxScore: (q.score/100)*maxScore
+                    const maxScore = questionInDb?.score ?? 3; // Default score if not found
+                    const aiScore = q.score ?? 0; // Raw AI score
+
+                    // Convert AI score to match question scoring scale
+                    // If AI returns percentage (0-100), convert to actual score
+                    let studentScore = aiScore;
+                    if (aiScore > maxScore && aiScore <= 100) {
+                        // AI returned percentage, convert to actual score
+                        studentScore = (aiScore / 100) * maxScore;
+                    } else if (aiScore > maxScore) {
+                        // AI score is higher than max, cap it at max score
+                        studentScore = maxScore;
+                    }
+
+                    // Ensure score is not negative and not higher than max
+                    studentScore = Math.max(0, Math.min(maxScore, studentScore));
+
+                    console.log(`Written question ${questionId} scoring:`, {
+                        questionId,
+                        maxScore,
+                        aiScore,
+                        finalStudentScore: studentScore,
+                        questionText: questionInDb?.question
+                    });
 
                     totalScore += studentScore;
 
@@ -567,6 +600,19 @@ export class QuizService {
             }
         }
 
+        // Calculate total possible score for validation
+        const totalPossibleScore = attempt.studentAnswers.reduce((sum, ans) => sum + ans.question.score, 0);
+
+        console.log(`Quiz attempt ${quizAttemptId} completion summary:`, {
+            attemptId: quizAttemptId,
+            studentId: userId,
+            totalScore,
+            totalPossibleScore,
+            scorePercentage: totalPossibleScore > 0 ? (totalScore / totalPossibleScore) * 100 : 0,
+            questionCount: attempt.studentAnswers.length,
+            resultsCount: results.length
+        });
+
         const updatedAttempt = await this.prisma.quizAttempt.update({
             where: { id: quizAttemptId },
             data: { score: totalScore, endedAt: new Date() }
@@ -575,6 +621,8 @@ export class QuizService {
         return {
             attemptId: updatedAttempt.id,
             totalScore,
+            totalPossibleScore,
+            scorePercentage: totalPossibleScore > 0 ? (totalScore / totalPossibleScore) * 100 : 0,
             results
         };
     }
@@ -711,7 +759,7 @@ export class QuizService {
     async getStudentFeedbacks(userId: number) {
         return await this.prisma.quizAttempt.findMany({
             where: { studentId: userId },
-            include: { 
+            include: {
                 feedback: {
                     include: {
                         QuestionFeedback: {
@@ -792,13 +840,13 @@ export class QuizService {
     // Get all feedback for a student across all quizzes
     async getAllStudentFeedback(userId: number) {
         return await this.prisma.quizAttempt.findMany({
-            where: { 
+            where: {
                 studentId: userId,
                 feedback: {
                     isNot: null
                 }
             },
-            include: { 
+            include: {
                 feedback: {
                     include: {
                         QuestionFeedback: {
@@ -1159,7 +1207,7 @@ export class QuizService {
             // Calculate success rate based on actual scores (weighted)
             const totalPossibleScore = latestAttempt.studentAnswers.reduce((sum, sa) => sum + sa.question.score, 0);
             const actualScore = latestAttempt.score ?? 0;
-            
+
             // Debug logging
             console.log(`Student ${student.id} - Score calculation:`, {
                 actualScore,
@@ -1172,7 +1220,7 @@ export class QuizService {
                     isCorrect: sa.answer === sa.question.answer
                 }))
             });
-            
+
             // Calculate success rate - use calculated score if stored score seems incorrect
             let calculatedScore = 0;
             for (const sa of latestAttempt.studentAnswers) {
@@ -1180,16 +1228,16 @@ export class QuizService {
                     calculatedScore += sa.question.score;
                 }
             }
-            
+
             // Use calculated score if it's more reasonable than stored score
-            const scoreToUse = (actualScore > totalPossibleScore && calculatedScore <= totalPossibleScore) 
-                ? calculatedScore 
+            const scoreToUse = (actualScore > totalPossibleScore && calculatedScore <= totalPossibleScore)
+                ? calculatedScore
                 : actualScore;
-            
-            const successRateThisQuiz = totalPossibleScore === 0 
-                ? 0 
+
+            const successRateThisQuiz = totalPossibleScore === 0
+                ? 0
                 : Math.min(100, (scoreToUse / totalPossibleScore) * 100);
-                
+
             console.log(`Student ${student.id} - Final calculation:`, {
                 storedScore: actualScore,
                 calculatedScore,
@@ -1197,11 +1245,11 @@ export class QuizService {
                 totalPossibleScore,
                 successRate: successRateThisQuiz
             });
-            
+
             const successRatePrev = attempts.slice(0, -1).map((a) => {
                 const attemptTotalScore = a.studentAnswers.reduce((sum, sa) => sum + sa.question.score, 0);
-                return attemptTotalScore === 0 
-                    ? 0 
+                return attemptTotalScore === 0
+                    ? 0
                     : Math.min(100, ((a.score ?? 0) / attemptTotalScore) * 100);
             });
 
@@ -1224,8 +1272,8 @@ export class QuizService {
         }
 
         // Additional validation for meaningful data
-        const hasValidFeedback = studentFeedbacks.some(s => 
-            s.summary && s.summary.trim() !== '' && 
+        const hasValidFeedback = studentFeedbacks.some(s =>
+            s.summary && s.summary.trim() !== '' &&
             (s.strengths.length > 0 || s.weaknesses.length > 0)
         );
 
@@ -1237,15 +1285,15 @@ export class QuizService {
         const allWrongQuestions = studentFeedbacks.flatMap((s: any) => s.most_wrong_questions || []);
         const allPrevScores = studentFeedbacks.flatMap((s: any) => s.avg_score_prev || []);
         const allPrevSuccessRates = studentFeedbacks.flatMap((s: any) => s.success_rate_prev || []);
-        
+
         const avgScoreThisQuiz = Number(
             (studentFeedbacks.reduce((acc: number, s: any) => acc + (s.avg_score_this_quiz || 0), 0) /
-            studentFeedbacks.length).toFixed(2)
+                studentFeedbacks.length).toFixed(2)
         );
-        
+
         const avgSuccessRateThisQuiz = Number(
             (studentFeedbacks.reduce((acc: number, s: any) => acc + (s.success_rate_this_quiz || 0), 0) /
-            studentFeedbacks.length).toFixed(2)
+                studentFeedbacks.length).toFixed(2)
         );
 
         const payload: GroupFeedbackRequestDto = {
@@ -1282,7 +1330,7 @@ export class QuizService {
             avg_score_prev: s.avg_score_prev,
             success_rate_prev: s.success_rate_prev
         })));
-        
+
         let response;
         try {
             response = await axios.post(
@@ -1305,7 +1353,7 @@ export class QuizService {
                 url: error?.config?.url,
                 payload: error?.config?.data
             });
-            
+
             // Provide more specific error messages based on the status code
             let errorMessage = 'Failed to generate group feedback';
             if (error?.response?.status === 500) {
@@ -1317,13 +1365,13 @@ export class QuizService {
             } else if (error?.code === 'ECONNABORTED') {
                 errorMessage = 'Request timeout. AI service is taking too long to respond.';
             }
-            
+
             // If it's a 500 error, we can provide a fallback response
             if (error?.response?.status === 500) {
                 console.warn('AI service returned 500, providing fallback response');
                 return this.generateFallbackGroupFeedback(payload, studentFeedbacks);
             }
-            
+
             throw new InternalServerErrorException(errorMessage);
         }
 
@@ -1335,13 +1383,13 @@ export class QuizService {
         // Generate a basic fallback response when AI service is unavailable
         const avgScore = payload.avg_score_this_quiz;
         const avgSuccessRate = payload.success_rate_this_quiz;
-        
+
         console.log('Fallback response data:', {
             avgScore,
             avgSuccessRate,
             payloadKeys: Object.keys(payload)
         });
-        
+
         let overallSummary = '';
         if (avgSuccessRate >= 80) {
             overallSummary = 'The group shows strong performance with high success rates.';
