@@ -29,8 +29,8 @@ import { QuestionAnswerDto } from './dto/question-answer.dto';
 
 @ApiTags('Quiz')
 @Controller('quiz')
-@UseGuards(AuthenticationGuard, AuthorizationGuard)
 @ApiBearerAuth()
+@UseGuards(AuthenticationGuard, AuthorizationGuard)
 export class QuizController {
     constructor(private readonly quizService: QuizService) { }
 
@@ -507,7 +507,7 @@ export class QuizController {
         return await this.quizService.updateQuizStatus(id, req.user.id, updateQuizDto.status);
     }
 
-
+  
     @Get(':quizId/correct')
     @Roles(Role.TEACHER)
     async correctQuiz(

@@ -367,15 +367,15 @@ export class AnalysisService {
      */
 
     const ongingQuizzesCount = await this.prisma.quiz.count({
-      where: { createdById: teacherId, startsAt: { lte: new Date() }, endsAt: { gte: new Date() ,  } , status: 'PUBLIC' },
+      where: { createdById: teacherId, startsAt: { lte: new Date() }, endsAt: { gte: new Date(), }, status: 'PUBLIC' },
     });
 
     const endedQuizzesCount = await this.prisma.quiz.count({
-      where: { createdById: teacherId, endsAt: { lte: new Date() ,} , status: 'PUBLIC' },
+      where: { createdById: teacherId, endsAt: { lte: new Date(), }, status: 'PUBLIC' },
     });
 
     const upcomingQuizzesCount = await this.prisma.quiz.count({
-      where: { createdById: teacherId, startsAt: { gt: new Date() } , status: 'PUBLIC' },
+      where: { createdById: teacherId, startsAt: { gt: new Date() }, status: 'PUBLIC' },
     });
 
     return {
@@ -391,5 +391,105 @@ export class AnalysisService {
       upcomingQuizzes: upcomingQuizzesCount
 
     };
+  }
+
+  async getStudentStats(studentId: number) {
+    let n_groups = await this.prisma.membership.count({
+      where: {
+        studentId: studentId
+      }
+    })
+    let n_exams = await this.prisma.quizAttempt.count({
+      where: {
+        studentId: studentId
+      }
+    })
+
+    let n_lessons = await this.prisma.lesson.count({
+      where: {
+        groups: {
+          some: {
+            group: {
+              memberships: {
+                some: {
+                  studentId: studentId
+                }
+              }
+            }
+          }
+        }
+      }
+    })
+
+    return {
+      groups: n_groups,
+      exams: n_exams,
+      lessons: n_lessons
+    }
+
+
+  }
+
+  async getAllResults(studentId : number) {
+    let results = await this.prisma.quizAttempt.findMany({
+      where: {
+        studentId: studentId
+      },
+      include: {
+        quiz: true
+      }
+    });
+
+    let n_exams_oncoming = await this.prisma.quiz.count({
+      where: {
+        status: 'PUBLIC',
+        startsAt: {
+          gt: new Date()
+        },
+        group : {
+          memberships: {
+            some: {
+              studentId: studentId
+            }
+          }
+        }
+      }
+    });
+     
+    let n_exams_ended = await this.prisma.quiz.count({
+      where: {
+        status: 'PUBLIC',
+        endsAt: {
+          lte: new Date()
+        },
+        group : {
+          memberships: {
+            some: {
+              studentId: studentId
+            }
+          }
+        }
+      }
+    });
+
+    let n_exams_onging = await this.prisma.quiz.count({
+      where: {
+        status: 'PUBLIC',
+        startsAt: {
+          lte: new Date()
+        },
+        endsAt: {
+          gte: new Date()
+        },
+        group : {
+          memberships: {
+            some: {
+              studentId: studentId
+            }
+          }
+        }
+      }
+    })
+    return {results, n_exams_oncoming, n_exams_ended , n_exams_onging};
   }
 }

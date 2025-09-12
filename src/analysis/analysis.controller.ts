@@ -5,13 +5,16 @@ import { Roles } from 'src/decorator/decorator/roles.decorator';
 import { Role } from 'src/decorator/enums/roles';
 import { AuthenticationGuard } from 'src/guards/authentication.guard';
 import { AuthorizationGuard } from 'src/guards/authorization.guard';
-
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+@ApiTags('Analysis')
+@ApiBearerAuth()
 @Controller('analysis')
 export class AnalysisController {
   constructor(private readonly analysisService: AnalysisService) {}
 
   // /analysis/students/:id/analysis
   @Get('students/:id/analysis')
+  @ApiOperation({ summary: 'Retrieves analysis data for a given student' })
   /**
    * Retrieves analysis data for a given student
    * @param id The ID of the student to retrieve analysis data for
@@ -23,6 +26,7 @@ export class AnalysisController {
 
   // /analysis/groups/:id/analysis
   @Get('groups/:id/analysis')
+  @ApiOperation({ summary: 'Retrieves analysis data for a given group' })
   /**
    * Retrieves analysis data for a given group
    * @param id The ID of the group to retrieve analysis data for
@@ -36,6 +40,7 @@ export class AnalysisController {
 
   // /analysis/exams/:id/analysis
   @Get('exams/:id/analysis')
+  @ApiOperation({ summary: 'Retrieves analysis data for a given exam' })
   /**
    * Retrieves analysis data for a given exam
    * @param id The ID of the exam to retrieve analysis data for
@@ -48,10 +53,79 @@ export class AnalysisController {
   }
 
   @Get('stats')
+  @ApiOperation({ summary: 'Retrieves statistics for a teacher' })
   @Roles(Role.TEACHER)
   @UseGuards(AuthenticationGuard, AuthorizationGuard)
   async getStats(@Req() req) {
     const teacherId = req.user.id; // جاي من الـ JWT
     return this.analysisService.getStats(+teacherId);
   }
-}
+
+  @Get('student/stats')
+  @ApiOperation({ summary: 'Retrieves statistics for a student' })
+  @ApiResponse({
+    schema: {
+      type: 'object',
+      properties: {
+        groups: { type: 'integer' },
+        exams: { type: 'integer' },
+        lessons: { type: 'integer' },
+      },
+    },
+  })
+  @Roles(Role.STUDENT)
+  @UseGuards(AuthenticationGuard, AuthorizationGuard)
+  async getStudentStats(@Req() req) {
+    const studentid = req.user.id; // جاي من الـ JWT
+    return this.analysisService.getStudentStats(+studentid);
+  }
+
+  @Get('student/stats/result')
+  @ApiOperation({ summary: 'Retrieves all results for a student and his exams' })
+  @ApiResponse({
+    schema: {
+      type: 'object',
+      properties: {
+        results: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'integer' },
+              quizId: { type: 'integer' },
+              studentId: { type: 'integer' },
+              score: { type: 'integer' },
+              createdAt: { type: 'string', format: 'date-time' },
+              startedAt: { type: 'string', format: 'date-time' },
+              endedAt: { type: 'string', format: 'date-time' },
+              quiz: {
+                type: 'object',
+                properties: {
+                  id: { type: 'integer' },
+                  title: { type: 'string' },
+                  status: { type: 'string', enum: ['PUBLIC', 'DRAFT'] },
+                  subjectId: { type: 'integer' },
+                  groupId: { type: 'integer' },
+                  createdById: { type: 'integer' },
+                  startsAt: { type: 'string', format: 'date-time' },
+                  endsAt: { type: 'string', format: 'date-time' },
+                  durationMins: { type: 'integer' },
+                  isActive: { type: 'boolean' },
+                  language: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        n_exams_oncoming: { type: 'integer' },
+        n_exams_ended: { type: 'integer' },
+        n_exams_onging: { type: 'integer' },
+      },
+    },
+  })
+  @Roles(Role.STUDENT)
+  @UseGuards(AuthenticationGuard, AuthorizationGuard)
+  async getGroupStats(@Req() req) {
+    const studentId = req.user.id; // جاي من الـ JWT
+    return this.analysisService.getAllResults(+studentId);
+}}
