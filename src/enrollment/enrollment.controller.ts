@@ -169,4 +169,43 @@ export class EnrollmentController {
   updateStatusreject(@Param('id') id: string) {
     return this.enrollmentService.reject(+id);
   }
+
+
+  @Get('teacher/all')
+  @Roles(Role.TEACHER)
+  @UseGuards(AuthenticationGuard,AuthorizationGuard)
+  /**
+   * Gets all enrollments for a given teacher
+   * @param req the express request object
+   * @returns an array of enrollment objects
+   */
+  @ApiOperation({ summary: 'Get all enrollments for the current teacher' })
+  @ApiOkResponse({
+    description: 'List of enrollments for the teacher',
+    schema: {
+      type: 'array',
+      items: {
+        example: [
+          {
+            status: 'APPROVED',
+            id: 1,
+            student: {
+              id: 2,
+              name: 'student1',
+              email: 'student1@gmail.com'
+            },
+            group: {
+              id: 1,
+              name: 'Group6',
+              createdAt: '2025-09-10T15:16:14.345Z'
+            }
+          },
+         
+        ]
+      }
+    }
+  })
+  getallenmentsforteacher(@Req() req: any) {
+    return this.enrollmentService.findAllByTeacher(+req.user.id);
+  }
 }

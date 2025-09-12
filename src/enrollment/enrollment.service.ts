@@ -62,7 +62,7 @@ export class EnrollmentService {
     await this.notificationService.create(
       enrollment.group.createdBy.id,
       `You have a new enrollment request in group ${enrollment.group.name}`,
-       NotificationType.GROUP_JOINED
+      NotificationType.GROUP_JOINED
     );
     this.notificationGateway.sendNotification(
       enrollment.group.createdBy.id.toString(),
@@ -177,7 +177,7 @@ export class EnrollmentService {
         id: id
       },
       data: {
-        status: Status.APPROVED,    
+        status: Status.APPROVED,
       }
     });
 
@@ -206,4 +206,41 @@ export class EnrollmentService {
     this.notificationGateway.sendNotification(enrollment.studentId.toString(), `Your enrollment in group ${enrollment.groupId} has been rejected.`);
     return updatedEnrollment;
   }
+
+  async findAllByTeacher(userId: number) {
+    let enrollments = await this.prisma.membership.findMany({
+      where: {
+        group: {
+          createdBy: {
+            id: userId
+          },
+        },
+
+      },
+      select: {
+        createdAt: true,
+        status : true,
+        id: true,
+        student: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          }
+        },
+        group :{
+          select: {
+            id: true,
+            name: true,
+            createdAt: true
+          }
+        },
+
+      }
+    });
+
+    return enrollments;
+  }
+
+
 }
