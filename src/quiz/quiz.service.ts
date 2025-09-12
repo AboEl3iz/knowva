@@ -787,8 +787,8 @@ export class QuizService {
 
 
 
-     getAvailableQuizzes(userId: number) {
-        return  this.prisma.quiz.findMany({
+    getAvailableQuizzes(userId: number) {
+        return this.prisma.quiz.findMany({
             where: {
                 isActive: true,
                 startsAt: { lte: new Date() },
@@ -809,7 +809,7 @@ export class QuizService {
         });
     }
 
-   
+
 
 
 

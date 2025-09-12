@@ -6,7 +6,7 @@ import { AuthenticationGuard } from 'src/guards/authentication.guard';
 import { AuthorizationGuard } from 'src/guards/authorization.guard';
 import { Roles } from 'src/decorator/decorator/roles.decorator';
 import { Role } from 'src/decorator/enums/roles';
-import { ApiBearerAuth, ApiForbiddenResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiForbiddenResponse, ApiOkResponse, ApiOperation, ApiParam, ApiSchema, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { GroupResponseDto } from './dto/group-response.dto';
 
 @Controller('group')
@@ -20,6 +20,27 @@ export class GroupController {
   
   @Roles(Role.TEACHER)
   @UseGuards(AuthenticationGuard, AuthorizationGuard)
+  @ApiBody({ description: 'The group data', schema:{
+    example: {
+      name: 'Math 101 Group',
+      capacity: 30
+    }
+  }})
+  @ApiOkResponse({
+    description: 'The created group object',
+    type: GroupResponseDto,
+    example: {
+      id: '1',
+      name: 'Math 101 Group',
+      capacity: 30,
+      subjectId: 1,
+      status: 'active',
+      createdAt: '2025-09-12T10:00:00.000Z',
+      token : '1234'
+    }
+  })
+  @ApiParam({ name: 'subjectId', type: 'number', description: 'The id of the subject that this group belongs to' })
+  // @ApiBody({ description: 'The group data', type: CreateGroupDto })
   /**
    * Creates a new group
    * @param subjectId The id of the subject that this group belongs to

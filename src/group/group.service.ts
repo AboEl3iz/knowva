@@ -6,6 +6,8 @@ import { Group } from '@prisma/client';
 import { IGroup } from 'src/helper/interfaces/interfaces.response';
 import { randomBytes } from "crypto";
 import { customAlphabet, nanoid } from 'nanoid';
+import { transliterate as tr } from 'transliteration';
+
 @Injectable()
 export class GroupService {
   constructor(private prisma: PrismaService) {
@@ -15,14 +17,17 @@ export class GroupService {
   async create(createGroupDto: CreateGroupDto, subjectId: number, userId: number): Promise<Group> {
     let subject = await this.prisma.subject.findUnique({ where: { id: subjectId } });
     if (!subject) throw new BadRequestException("Subject not found");
-    // take first 4 letters of group name uppercased
-    const prefix = createGroupDto.name
+
+    // حول الاسم أو خليه Fallback GRP
+    let prefix = tr(createGroupDto.name) // يحوّل العربي لإنجليزي
       .replace(/\s+/g, "")
       .substring(0, 4)
       .toUpperCase();
 
+    if (!prefix) prefix = 'GRP';
+
     // generate short random code
-    const suffix = nanoid(); // e.g., 3F9XK2
+    const suffix = nanoid();
 
     const token = `${prefix}-${suffix}`;
     let group = await this.prisma.group.create({
@@ -36,6 +41,7 @@ export class GroupService {
     });
     return group;
   }
+
 
   async toggleGroupStatus(groupId: number, userId: number): Promise<IGroup> {
     const group = await this.prisma.group.findUnique({
@@ -278,7 +284,7 @@ export class GroupService {
       }),
       status,
       createdAt: group.createdAt,
-      token : group.token
+      token: group.token
     };
   }
 
@@ -317,7 +323,7 @@ export class GroupService {
     return { message: "Group deleted successfully" };
   }
 
-  async findAllByStudent(studentId : number) : Promise<IGroup[]> {
+  async findAllByStudent(studentId: number): Promise<IGroup[]> {
     let groups = await this.prisma.group.findMany({
       where: {
         memberships: {
@@ -338,7 +344,7 @@ export class GroupService {
         createdBy: { select: { id: true, name: true, email: true } },
       },
     });
-  return groups.map((group) => {
+    return groups.map((group) => {
       let status: "complete" | "active" | "inactive";
       switch (group.status) {
         case 'COMPLETED':
