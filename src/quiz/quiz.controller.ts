@@ -474,6 +474,37 @@ export class QuizController {
         return await this.quizService.requestFeedbackStudent(req.user.id, id);
     }
 
+    // @Get('student/feedback/:quizAttemptId')
+    // @Roles(Role.TEACHER)
+    // @UseGuards(AuthenticationGuard, AuthorizationGuard)
+    // @ApiOperation({ summary: 'Get student feedback for a quiz attempt' })
+    // @ApiParam({ name: 'quizAttemptId', description: 'Quiz Attempt ID' })
+    // @ApiResponse({ status: 200, description: 'Student feedback retrieved successfully' })
+    // @ApiResponse({ status: 404, description: 'Quiz attempt not found' })
+    // /**
+    //  * Retrieves student feedback for a quiz attempt for the authenticated teacher
+    //  *
+    //  * @param quizAttemptId The ID of the quiz attempt to retrieve feedback for
+    //  * @returns The student feedback
+    //  */
+    // async getFeedbackStudent(@Param('quizAttemptId', ParseIntPipe) quizAttemptId: number, @Request() req) {
+    //     return await this.quizService.getStudentFeedback(req.user.id, quizAttemptId);
+    // }
+
+    // @Get('student/feedback/all')
+    // @Roles(Role.TEACHER)
+    // @UseGuards(AuthenticationGuard, AuthorizationGuard)
+    // @ApiOperation({ summary: 'Get all student feedback' })
+    // @ApiResponse({ status: 200, description: 'All student feedback retrieved successfully' })
+    // /**
+    //  * Retrieves all student feedback for the authenticated teacher
+    //  *
+    //  * @returns All student feedback
+    //  */
+    // async getAllFeedbackStudent(@Request() req) {
+    //     return await this.quizService.getStudentFeedbacks(req.user.id);
+    // }
+
     @Get(':groupId/request-feedback')
     async getGroupFeedback(
         @Param('groupId') groupId: number,
@@ -484,9 +515,32 @@ export class QuizController {
 
     @Get('feedback/teacher/:studentId')
     @Roles(Role.TEACHER)
+    @ApiResponse({
+        status: 200,
+        description: 'Teacher feedback requests for a student retrieved successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                id: { type: 'number' },
+                studentId: { type: 'number' },
+                teacherId: { type: 'number' },
+                progress: { type: 'string' },
+                summaryFeedback: { type: 'string' },
+                strongPoints: { type: 'array', items: { type: 'string' } },
+                weakPoints: { type: 'array', items: { type: 'string' } },
+                improvedPoints: { type: 'array', items: { type: 'string' } },
+                declinedPoints: { type: 'array', items: { type: 'string' } },
+                unchangedPoints: { type: 'array', items: { type: 'string' } },
+                scoreTrend: { type: 'array', items: { type: 'number' } },
+                riskLevel: { type: 'string' },
+                teachingRecommendation: { type: 'string' },
+                createdAt: { type: 'string', format: 'date-time' },
+                userId: { type: 'number', nullable: true },
+            },
+        },
+    })
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get teacher feedback requests for a student' })
-    @ApiResponse({ status: 200, description: 'Teacher feedback requests for a student retrieved successfully' })
     @ApiParam({ name: 'studentId', description: 'Student ID' })
     /**
      * Retrieves all teacher feedback requests for a student for the authenticated teacher
@@ -505,7 +559,13 @@ export class QuizController {
     @ApiParam({ name: 'studentId', description: 'Student ID' })
     @ApiResponse({
         status: 200,
-        description: 'Teacher feedback generated successfully'
+        description: 'Teacher feedback generated successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                message: { type: 'string', example: 'Feedback stored successfully' }
+            }
+        }
     })
     @ApiResponse({ status: 400, description: 'Invalid input data' })
     /**

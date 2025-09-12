@@ -706,6 +706,28 @@ export class QuizService {
 
         return await this.prisma.question.update({ where: { id: questionId, createdById: userId }, data: questionDto });
     }
+    // feedback + attempt
+    async getStudentFeedbacks(userId: number) {
+        return await this.prisma.quizAttempt.findMany({
+            where: { studentId: userId },
+            include: { feedback: true }
+        })
+    }
+
+    //single detailed  feedback
+    async getStudentFeedback(userId: number, attemptId: number) {
+        return await this.prisma.quizAttempt.findFirst({
+            where: { studentId: userId, id: attemptId },
+            include: {
+                feedback: {
+                    include: {
+                        QuestionFeedback: true
+                    }
+                }
+            }
+        }
+        );
+    }
 
     async removeQuestionFromQuiz(userId: number, questionId: number, quizId: number) {
         const quiz = await this.prisma.quiz.findUnique({ where: { id: quizId, createdById: userId } });
@@ -858,9 +880,17 @@ export class QuizService {
         const attempts = response.data;
 
         for (const attempt of attempts) {
-            // 1️⃣ أنشئ AttemptFeedback
-            const attemptFeedback = await this.prisma.attemptFeedback.create({
-                data: {
+            // 1️⃣ أنشئ أو حدث AttemptFeedback
+            const attemptFeedback = await this.prisma.attemptFeedback.upsert({
+                where: {
+                    attemptId: parseInt(attempt.attempt_id, 10),
+                },
+                update: {
+                    summary: attempt.summary ?? "No summary",
+                    weakPoints: attempt.weak_points ?? [],
+                    goodPoints: attempt.good_points ?? [],
+                },
+                create: {
                     attemptId: parseInt(attempt.attempt_id, 10),
                     summary: attempt.summary ?? "No summary",
                     weakPoints: attempt.weak_points ?? [],
@@ -868,14 +898,21 @@ export class QuizService {
                 },
             });
 
-            // 2️⃣ جهّز الداتا الخاصة بالـ QuestionFeedback
+            // 2️⃣ احذف QuestionFeedback القديم إذا كان موجود
+            await this.prisma.questionFeedback.deleteMany({
+                where: {
+                    attemptFeedbackId: attemptFeedback.id,
+                },
+            });
+
+            // 3️⃣ جهّز الداتا الخاصة بالـ QuestionFeedback
             const data = attempt.results.map((result) => ({
                 questionAnswerId: parseInt(result.answer_id, 10),
                 feedback: result.feedback,
                 attemptFeedbackId: attemptFeedback.id,
             }));
 
-            // 3️⃣ خزّن كل QuestionFeedback
+            // 4️⃣ خزّن كل QuestionFeedback
             await this.prisma.questionFeedback.createMany({ data });
         }
 

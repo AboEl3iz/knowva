@@ -66,7 +66,7 @@ export class EnrollmentService {
     );
     this.notificationGateway.sendNotification(
       enrollment.group.createdBy.id.toString(),
-      `You have a new enrollment request in group ${enrollment.group.name} from ${enrollment.student.id}`,
+      `You have a new enrollment request in group ${enrollment.group.name} from ${enrollment.student.name} having email (${enrollment.student.email})`,
     );
 
     // 🔹 check group status after enrollment
