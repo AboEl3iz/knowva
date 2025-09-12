@@ -887,7 +887,10 @@ export class QuizService {
 
 
     async getRequestedFeedbackTeacher(userId: number, studentId: number) {
-        return await this.prisma.studentFeedback.findMany({ where: { teacherId: userId, studentId } });
+        return await this.prisma.studentFeedback.findMany({
+            where: { teacherId: userId, studentId },
+            orderBy: { createdAt: 'desc' },
+        });
     }
 
     async requestFeedbackTeacher(userId: number, studentId: number) {
@@ -940,22 +943,41 @@ export class QuizService {
             );
         }
 
-        const data = response.data;
+        const data = response.data || {};
 
-        return await this.prisma.studentFeedback.create({
-            data: {
+        // Normalize types for Prisma schema
+        const toStringArray = (v: any): string[] => Array.isArray(v) ? v.map((x) => String(x)) : [];
+        const toNumberArray = (v: any): number[] => Array.isArray(v) ? v.map((x) => Number(x) || 0) : [];
+
+        return await this.prisma.studentFeedback.upsert({
+            where: {
+                studentId_teacherId: { studentId, teacherId: userId },
+            },
+            update: {
+                progress: String(data.progress ?? ''),
+                summaryFeedback: String(data.summary_feedback ?? ''),
+                strongPoints: toStringArray(data.strong_points),
+                weakPoints: toStringArray(data.weak_points),
+                improvedPoints: toStringArray(data.improved_points),
+                declinedPoints: toStringArray(data.declined_points),
+                unchangedPoints: toStringArray(data.unchanged_points),
+                scoreTrend: toNumberArray(data.score_trend),
+                riskLevel: String(data.risk_level ?? 'unknown'),
+                teachingRecommendation: String(data.teaching_recommendation ?? ''),
+            },
+            create: {
                 studentId,
                 teacherId: userId,
-                progress: data.progress ?? '',
-                summaryFeedback: data.summary_feedback ?? '',
-                strongPoints: data.strong_points ?? [],
-                weakPoints: data.weak_points ?? [],
-                improvedPoints: data.improved_points ?? [],
-                declinedPoints: data.declined_points ?? [],
-                unchangedPoints: data.unchanged_points ?? [],
-                scoreTrend: data.score_trend ?? [],
-                riskLevel: data.risk_level ?? 'unknown',
-                teachingRecommendation: data.teaching_recommendation ?? '',
+                progress: String(data.progress ?? ''),
+                summaryFeedback: String(data.summary_feedback ?? ''),
+                strongPoints: toStringArray(data.strong_points),
+                weakPoints: toStringArray(data.weak_points),
+                improvedPoints: toStringArray(data.improved_points),
+                declinedPoints: toStringArray(data.declined_points),
+                unchangedPoints: toStringArray(data.unchanged_points),
+                scoreTrend: toNumberArray(data.score_trend),
+                riskLevel: String(data.risk_level ?? 'unknown'),
+                teachingRecommendation: String(data.teaching_recommendation ?? ''),
             },
         });
     }
@@ -1026,7 +1048,7 @@ export class QuizService {
                 success_rate_this_quiz: successRateThisQuiz,
                 success_rate_prev: successRatePrev,
             };
-        }).filter(Boolean);
+        }).filter(Boolean) as any[];
 
         const payload = {
             most_wrong_questions: studentFeedbacks.flatMap((s: any) => s.most_wrong_questions),
@@ -1061,7 +1083,8 @@ export class QuizService {
             );
         }
 
-        return response.data;
+        const data = response.data || {};
+        return data;
     }
 
     async finishQuizAttempt(userId: number, quizAttemptId: number) {

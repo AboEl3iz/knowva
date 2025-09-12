@@ -504,11 +504,16 @@ export class AnalysisService {
                 group: {
                     memberships: {
                         some: { studentId: userId, status: 'APPROVED' }
-                    }
-                }
+                    },
+
+                    
+                },
+                
             },
             orderBy: { startsAt: 'asc' },
-            include: { group: true, subject: true }
+            include: { group: {
+              select: { id: true, name: true , status: true }
+            }, subject: true }
         });
         Logger.debug(ongoing);
         if (ongoing) return ongoing;
