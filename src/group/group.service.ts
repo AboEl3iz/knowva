@@ -315,4 +315,28 @@ export class GroupService {
     await this.prisma.group.delete({ where: { id: id } });
     return { message: "Group deleted successfully" };
   }
+
+  async findAllByStudent(studentId : number) {
+    let groups = await this.prisma.group.findMany({
+      where: {
+        memberships: {
+          some: {
+            studentId: studentId,
+            status: 'APPROVED'
+          }
+        }
+      },
+      include: {
+        memberships: {
+          select: {
+            student: { select: { id: true, name: true, email: true } },
+          },
+          where: { status: 'APPROVED' },
+        },
+        subject: { select: { id: true, title: true, description: true } },
+        createdBy: { select: { id: true, name: true, email: true } },
+      },
+    });
+    return groups;
+  }
 }

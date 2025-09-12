@@ -6,6 +6,8 @@ import { AuthenticationGuard } from 'src/guards/authentication.guard';
 import { AuthorizationGuard } from 'src/guards/authorization.guard';
 import { Roles } from 'src/decorator/decorator/roles.decorator';
 import { Role } from 'src/decorator/enums/roles';
+import { ApiForbiddenResponse, ApiOkResponse, ApiOperation, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import { GroupResponseDto } from './dto/group-response.dto';
 
 @Controller('group')
 export class GroupController {
@@ -94,5 +96,18 @@ export class GroupController {
   complete(@Param('id') id: string, @Req() req: any) {
     return this.groupService.toggleGroupStatus(+id, +req.user.id);
   }
-
+@Get('student/groups')
+  @ApiOperation({ summary: 'Get all groups for a student' })
+  @Roles(Role.STUDENT)
+  @UseGuards(AuthenticationGuard, AuthorizationGuard)
+  @ApiOkResponse({
+    description: 'A list of groups the student is a member of.',
+    type: GroupResponseDto,
+    isArray: true,
+  })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  @ApiForbiddenResponse({ description: 'Forbidden' })
+  findAllByStudent(@Req() req: any) {
+    return this.groupService.findAllByStudent(req.user.id);
+  }
 }
