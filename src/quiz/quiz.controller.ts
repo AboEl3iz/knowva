@@ -653,4 +653,30 @@ export class QuizController {
         return this.quizService.correctQuiz(+req.user.id, quizId);
     }
 
+
 }
+
+/**
+ * Student 2 - Score calculation: {
+  actualScore: 21,
+  totalPossibleScore: 15,
+  studentAnswers: [
+    {
+      questionId: 1,
+      questionScore: 5,
+      studentAnswer: "A",
+      correctAnswer: "A", 
+      isCorrect: true
+    },
+    // ... more questions
+  ]
+}
+
+Student 2 - Final calculation: {
+  storedScore: 21,
+  calculatedScore: 15,
+  scoreUsed: 15,
+  totalPossibleScore: 15,
+  successRate: 100
+}
+ */

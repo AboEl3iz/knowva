@@ -516,7 +516,7 @@ export class AnalysisService {
             }, subject: true }
         });
         Logger.debug(ongoing);
-        if (ongoing) return ongoing;
+        if (ongoing) return {...ongoing , currentStatus: 'ONGOING'};
 
         // Otherwise, return the next upcoming published quiz
         const upcoming = await this.prisma.quiz.findFirst({
@@ -533,6 +533,9 @@ export class AnalysisService {
             include: { group: true, subject: true }
         });
         Logger.debug(upcoming);
-        return upcoming ?? null;
+        return {
+            ...upcoming,
+            currentStatus: 'UPCOMING',
+        };
     }
 }
