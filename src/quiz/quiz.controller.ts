@@ -30,13 +30,14 @@ import { QuestionAnswerDto } from './dto/question-answer.dto';
 @ApiTags('Quiz')
 @Controller('quiz')
 @ApiBearerAuth()
-@UseGuards(AuthenticationGuard, AuthorizationGuard)
+
 export class QuizController {
     constructor(private readonly quizService: QuizService) { }
 
     // Quiz Management Endpoints
     @Get()
     @Roles(Role.TEACHER)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get all quizzes for the authenticated teacher' })
     @ApiResponse({ status: 200, description: 'List of quizzes retrieved successfully' })
     /**
@@ -50,6 +51,7 @@ export class QuizController {
 
     @Get(':id')
     @Roles(Role.TEACHER)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get a specific quiz by ID' })
     @ApiParam({ name: 'id', description: 'Quiz ID' })
     @ApiResponse({ status: 200, description: 'Quiz retrieved successfully' })
@@ -67,6 +69,7 @@ export class QuizController {
 
     @Post()
     @Roles(Role.TEACHER)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Create a new quiz' })
     @ApiBody({ type: CreateQuizDto })
     @ApiResponse({ status: 201, description: 'Quiz created successfully' })
@@ -83,6 +86,7 @@ export class QuizController {
 
     @Put(':id')
     @Roles(Role.TEACHER)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Update a quiz' })
     @ApiParam({ name: 'id', description: 'Quiz ID' })
     @ApiBody({ type: UpdateQuizDto })
@@ -105,6 +109,7 @@ export class QuizController {
 
     @Post(':id/duplicate')
     @Roles(Role.TEACHER)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Duplicate a quiz' })
     @ApiParam({ name: 'id', description: 'Quiz ID to duplicate' })
     @ApiResponse({ status: 201, description: 'Quiz duplicated successfully' })
@@ -124,6 +129,7 @@ export class QuizController {
 
     @Delete(':id')
     @Roles(Role.TEACHER)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Delete a quiz' })
     @ApiParam({ name: 'id', description: 'Quiz ID to delete' })
     @ApiResponse({ status: 204, description: 'Quiz deleted successfully' })
@@ -142,6 +148,7 @@ export class QuizController {
     // Question Management Endpoints
     @Get('questions/all')
     @Roles(Role.TEACHER)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get all questions for the authenticated teacher' })
     @ApiResponse({ status: 200, description: 'List of questions retrieved successfully' })
     /**
@@ -155,6 +162,7 @@ export class QuizController {
 
     @Get('question/:id')
     @Roles(Role.TEACHER)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get a specific question by ID' })
     @ApiParam({ name: 'id', description: 'Question ID' })
     @ApiResponse({ status: 200, description: 'Question retrieved successfully' })
@@ -171,6 +179,7 @@ export class QuizController {
 
     @Post(':quizId/questions')
     @Roles(Role.TEACHER)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Add a manual question to a quiz' })
     @ApiParam({ name: 'quizId', description: 'Quiz ID' })
     @ApiBody({
@@ -199,6 +208,7 @@ export class QuizController {
 
     @Post(':quizId/questions/:questionId')
     @Roles(Role.TEACHER)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Add an existing question to a quiz' })
     @ApiParam({ name: 'quizId', description: 'Quiz ID' })
     @ApiParam({ name: 'questionId', description: 'Question ID to add' })
@@ -222,6 +232,7 @@ export class QuizController {
 
     @Post('questions/ai/:quizId')
     @Roles(Role.TEACHER)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Add AI-generated questions to a quiz' })
     @ApiParam({ name: 'quizId', description: 'Quiz ID' })
     @ApiBody({ type: GenerateAIQuestionsDto, description: 'AI question generation parameters' })
@@ -245,6 +256,7 @@ export class QuizController {
 
     @Post('questions/:id/duplicate')
     @Roles(Role.TEACHER)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Duplicate a question' })
     @ApiParam({ name: 'id', description: 'Question ID to duplicate' })
     @ApiResponse({ status: 201, description: 'Question duplicated successfully' })
@@ -261,6 +273,7 @@ export class QuizController {
 
     @Put('questions/:id')
     @Roles(Role.TEACHER)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Update a question' })
     @ApiParam({ name: 'id', description: 'Question ID' })
     @ApiBody({ type: UpdateQuestionDto })
@@ -283,6 +296,7 @@ export class QuizController {
 
     @Delete('questions/:questionId/:quizId/remove-from-quiz')
     @Roles(Role.TEACHER)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Remove a question from its quiz' })
     @ApiParam({ name: 'id', description: 'Question ID' })
     @ApiResponse({ status: 200, description: 'Question removed from quiz successfully' })
@@ -303,6 +317,7 @@ export class QuizController {
 
     @Delete('questions/:id')
     @Roles(Role.TEACHER)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @HttpCode(HttpStatus.NO_CONTENT)
     @ApiOperation({ summary: 'Delete a question' })
     @ApiParam({ name: 'id', description: 'Question ID' })
@@ -321,6 +336,7 @@ export class QuizController {
     // Quiz Attempt Endpoints
     @Get(':id/attempts/my')
     @Roles(Role.STUDENT)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get my quiz attempts' })
     @ApiParam({ name: 'id', description: 'Quiz ID' })
     @ApiResponse({ status: 200, description: 'Quiz attempts retrieved successfully' })
@@ -336,6 +352,7 @@ export class QuizController {
 
     @Get(':id/attempts')
     @Roles(Role.TEACHER)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get all quiz attempts for a quiz' })
     @ApiParam({ name: 'id', description: 'Quiz ID' })
     @ApiResponse({ status: 200, description: 'Quiz attempts retrieved successfully' })
@@ -351,6 +368,7 @@ export class QuizController {
 
     @Post(':id/start')
     @Roles(Role.STUDENT)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Start a quiz attempt' })
     @ApiParam({ name: 'id', description: 'Quiz ID' })
     @ApiResponse({ status: 201, description: 'Quiz attempt started successfully' })
@@ -367,6 +385,7 @@ export class QuizController {
 
     @Post('attempts/:quizAttemptId/answers')
     @Roles(Role.STUDENT)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Add an answer to a quiz attempt' })
     @ApiParam({ name: 'quizAttemptId', description: 'Quiz Attempt ID' })
     @ApiBody({ type: [QuestionAnswerDto] })
@@ -389,6 +408,7 @@ export class QuizController {
 
     @Post('attempts/:quizAttemptId/complete')
     @Roles(Role.STUDENT)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Complete a quiz attempt' })
     @ApiParam({ name: 'quizAttemptId', description: 'Quiz Attempt ID' })
     @ApiResponse({ status: 200, description: 'Quiz attempt completed successfully' })
@@ -406,6 +426,7 @@ export class QuizController {
 
     @Get('attempts/:quizAttemptId')
     @Roles(Role.STUDENT)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get quiz attempt details' })
     @ApiParam({ name: 'quizAttemptId', description: 'Quiz Attempt ID' })
     @ApiResponse({ status: 200, description: 'Quiz attempt retrieved successfully' })
@@ -422,6 +443,7 @@ export class QuizController {
 
     @Get('available')
     @Roles(Role.STUDENT)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get available quizzes for student' })
     @ApiResponse({ status: 200, description: 'Available quizzes retrieved successfully' })
     /**
@@ -433,8 +455,11 @@ export class QuizController {
         return await this.quizService.getAvailableQuizzes(req.user.id);
     }
 
+    
+
     @Post(':id/request-feedback')
     @Roles(Role.TEACHER)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Request AI feedback for quiz attempts' })
     @ApiParam({ name: 'id', description: 'Quiz ID' })
     @ApiResponse({ status: 200, description: 'Feedback generated successfully' })
@@ -459,6 +484,7 @@ export class QuizController {
 
     @Get('feedback/teacher/:studentId')
     @Roles(Role.TEACHER)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get teacher feedback requests for a student' })
     @ApiResponse({ status: 200, description: 'Teacher feedback requests for a student retrieved successfully' })
     @ApiParam({ name: 'studentId', description: 'Student ID' })
@@ -474,6 +500,7 @@ export class QuizController {
 
     @Post('feedback/teacher/:studentId')
     @Roles(Role.TEACHER)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Request AI teacher feedback for student performance' })
     @ApiParam({ name: 'studentId', description: 'Student ID' })
     @ApiResponse({

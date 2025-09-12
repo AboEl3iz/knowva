@@ -1,26 +1,33 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { Observable } from 'rxjs';
+import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
 
 @Injectable()
 export class AuthorizationGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
-  canActivate(
-    context: ExecutionContext,
-  ): boolean | Promise<boolean> | Observable<boolean> {
-    const roles = this.reflector.get<string[]>('roles', context.getHandler());
-    if (!roles) {
-      return true; // If no roles are defined, allow access
-    }
-    
+  constructor(private reflector: Reflector) { }
+
+  canActivate(context: ExecutionContext): boolean {
+    const methodRoles = this.reflector.get<string[]>('roles', context.getHandler()) || [];
+    const classRoles = this.reflector.get<string[]>('roles', context.getClass()) || [];
+    console.log('Method metadata:', this.reflector.get<string[]>('roles', context.getHandler()));
+    console.log('Class metadata:', this.reflector.get<string[]>('roles', context.getClass()));
+
+    // الأولوية للميثود
+    const roles = methodRoles.length > 0 ? methodRoles : classRoles;
+
     const request = context.switchToHttp().getRequest();
-    const user = request.user; // Assuming user is attached to the request object
+    const user = request.user;
+
+    console.log('User role:', user.role);
+    console.log('Required roles:', roles);
+
+    if (!roles || roles.length === 0) {
+      return true;
+    }
 
     if (!user || !user.role) {
-      throw new UnauthorizedException('Unauthorized'); // If no user or roles, deny access
+      throw new UnauthorizedException('Unauthorized');
     }
 
-    // Check if the user's roles include any of the required roles
-    return roles.some(role => user.role.includes(role));
+    return roles.includes(user.role);
   }
 }

@@ -492,4 +492,42 @@ export class AnalysisService {
     })
     return {results, n_exams_oncoming, n_exams_ended , n_exams_onging};
   }
+   async getNextDueQuiz(userId: number) {
+        const now = new Date();
+        // Prefer currently ongoing quizzes
+        const ongoing = await this.prisma.quiz.findFirst({
+            where: {
+                isActive: true,
+                startsAt: { lte: now },
+                endsAt: { gt: now },
+                status: 'PUBLIC' as any,
+                group: {
+                    memberships: {
+                        some: { studentId: userId, status: 'APPROVED' }
+                    }
+                }
+            },
+            orderBy: { startsAt: 'asc' },
+            include: { group: true, subject: true }
+        });
+        Logger.debug(ongoing);
+        if (ongoing) return ongoing;
+
+        // Otherwise, return the next upcoming published quiz
+        const upcoming = await this.prisma.quiz.findFirst({
+            where: {
+                startsAt: { gt: now },
+                status: 'PUBLIC' as any,
+                group: {
+                    memberships: {
+                        some: { studentId: userId, status: 'APPROVED' }
+                    }
+                }
+            },
+            orderBy: { startsAt: 'asc' },
+            include: { group: true, subject: true }
+        });
+        Logger.debug(upcoming);
+        return upcoming ?? null;
+    }
 }

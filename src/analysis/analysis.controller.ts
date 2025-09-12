@@ -10,7 +10,7 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 @ApiBearerAuth()
 @Controller('analysis')
 export class AnalysisController {
-  constructor(private readonly analysisService: AnalysisService) {}
+  constructor(private readonly analysisService: AnalysisService) { }
 
   // /analysis/students/:id/analysis
   @Get('students/:id/analysis')
@@ -128,4 +128,21 @@ export class AnalysisController {
   async getGroupStats(@Req() req) {
     const studentId = req.user.id; // جاي من الـ JWT
     return this.analysisService.getAllResults(+studentId);
-}}
+  }
+
+  @Get('next')
+    @Roles(Role.STUDENT)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
+    // @UseGuards(AuthenticationGuard, AuthorizationGuard)
+    @ApiOperation({ summary: 'Get the next due quiz for the logged-in student' })
+    @ApiResponse({ status: 200, description: 'Next quiz or null if none' })
+    /**
+     * Returns the ongoing quiz if any; otherwise the nearest upcoming published quiz
+     * for the authenticated student based on group memberships.
+     */
+    async getNextDueQuiz(@Req() req : any) {
+        console.log(Role.STUDENT, Role.TEACHER);
+
+        return  this.analysisService.getNextDueQuiz(+req.user.id);
+    }
+}
