@@ -1156,22 +1156,54 @@ export class QuizService {
 
             const avgScoreThisQuiz = latestAttempt.score ?? 0;
             const avgScorePrev = attempts.slice(0, -1).map((a) => a.score ?? 0);
-            const successRateThisQuiz =
-                latestAttempt.studentAnswers.length === 0
-                    ? 0
-                    : latestAttempt.studentAnswers.filter((sa) => sa.answer === sa.question.answer).length /
-                    latestAttempt.studentAnswers.length *
-                    100;
-            const successRatePrev = attempts
-                .slice(0, -1)
-                .map(
-                    (a) =>
-                        a.studentAnswers.length === 0
-                            ? 0
-                            : (a.studentAnswers.filter((sa) => sa.answer === sa.question.answer).length /
-                                a.studentAnswers.length) *
-                            100,
-                );
+            // Calculate success rate based on actual scores (weighted)
+            const totalPossibleScore = latestAttempt.studentAnswers.reduce((sum, sa) => sum + sa.question.score, 0);
+            const actualScore = latestAttempt.score ?? 0;
+            
+            // Debug logging
+            console.log(`Student ${student.id} - Score calculation:`, {
+                actualScore,
+                totalPossibleScore,
+                studentAnswers: latestAttempt.studentAnswers.map(sa => ({
+                    questionId: sa.questionId,
+                    questionScore: sa.question.score,
+                    studentAnswer: sa.answer,
+                    correctAnswer: sa.question.answer,
+                    isCorrect: sa.answer === sa.question.answer
+                }))
+            });
+            
+            // Calculate success rate - use calculated score if stored score seems incorrect
+            let calculatedScore = 0;
+            for (const sa of latestAttempt.studentAnswers) {
+                if (sa.answer === sa.question.answer) {
+                    calculatedScore += sa.question.score;
+                }
+            }
+            
+            // Use calculated score if it's more reasonable than stored score
+            const scoreToUse = (actualScore > totalPossibleScore && calculatedScore <= totalPossibleScore) 
+                ? calculatedScore 
+                : actualScore;
+            
+            const successRateThisQuiz = totalPossibleScore === 0 
+                ? 0 
+                : Math.min(100, (scoreToUse / totalPossibleScore) * 100);
+                
+            console.log(`Student ${student.id} - Final calculation:`, {
+                storedScore: actualScore,
+                calculatedScore,
+                scoreUsed: scoreToUse,
+                totalPossibleScore,
+                successRate: successRateThisQuiz
+            });
+            
+            const successRatePrev = attempts.slice(0, -1).map((a) => {
+                const attemptTotalScore = a.studentAnswers.reduce((sum, sa) => sum + sa.question.score, 0);
+                return attemptTotalScore === 0 
+                    ? 0 
+                    : Math.min(100, ((a.score ?? 0) / attemptTotalScore) * 100);
+            });
 
             return {
                 student_id: student.id.toString(),
@@ -1179,7 +1211,7 @@ export class QuizService {
                 strengths: latestAttempt.feedback?.goodPoints ?? [],
                 weaknesses: latestAttempt.feedback?.weakPoints ?? [],
                 most_wrong_questions: mostWrongQuestions,
-                avg_score_this_quiz: avgScoreThisQuiz,
+                avg_score_this_quiz: scoreToUse, // Use the corrected score
                 avg_score_prev: avgScorePrev,
                 success_rate_this_quiz: successRateThisQuiz,
                 success_rate_prev: successRatePrev,
@@ -1191,28 +1223,65 @@ export class QuizService {
             throw new InternalServerErrorException('No student feedback data found for this group');
         }
 
+        // Additional validation for meaningful data
+        const hasValidFeedback = studentFeedbacks.some(s => 
+            s.summary && s.summary.trim() !== '' && 
+            (s.strengths.length > 0 || s.weaknesses.length > 0)
+        );
+
+        if (!hasValidFeedback) {
+            console.warn('Warning: No meaningful feedback data found for students in this group');
+        }
+
+        // Calculate aggregated data
+        const allWrongQuestions = studentFeedbacks.flatMap((s: any) => s.most_wrong_questions || []);
+        const allPrevScores = studentFeedbacks.flatMap((s: any) => s.avg_score_prev || []);
+        const allPrevSuccessRates = studentFeedbacks.flatMap((s: any) => s.success_rate_prev || []);
+        
+        const avgScoreThisQuiz = Number(
+            (studentFeedbacks.reduce((acc: number, s: any) => acc + (s.avg_score_this_quiz || 0), 0) /
+            studentFeedbacks.length).toFixed(2)
+        );
+        
+        const avgSuccessRateThisQuiz = Number(
+            (studentFeedbacks.reduce((acc: number, s: any) => acc + (s.success_rate_this_quiz || 0), 0) /
+            studentFeedbacks.length).toFixed(2)
+        );
+
         const payload: GroupFeedbackRequestDto = {
-            most_wrong_questions: studentFeedbacks.flatMap((s: any) => s.most_wrong_questions || []),
-            avg_score_this_quiz: Number(
-                (studentFeedbacks.reduce((acc: number, s: any) => acc + (s.avg_score_this_quiz || 0), 0) /
-                studentFeedbacks.length).toFixed(2)
-            ),
-            avg_score_prev: studentFeedbacks.flatMap((s: any) => s.avg_score_prev || []).map(score => Number(score)),
-            success_rate_this_quiz: Number(
-                (studentFeedbacks.reduce((acc: number, s: any) => acc + (s.success_rate_this_quiz || 0), 0) /
-                studentFeedbacks.length).toFixed(2)
-            ),
-            success_rate_prev: studentFeedbacks.flatMap((s: any) => s.success_rate_prev || []).map(rate => Number(rate)),
+            most_wrong_questions: allWrongQuestions.length > 0 ? allWrongQuestions : ["No specific wrong questions identified"],
+            avg_score_this_quiz: avgScoreThisQuiz,
+            avg_score_prev: allPrevScores.length > 0 ? allPrevScores.map(score => Number(score)) : [0],
+            success_rate_this_quiz: avgSuccessRateThisQuiz,
+            success_rate_prev: allPrevSuccessRates.length > 0 ? allPrevSuccessRates.map(rate => Number(rate)) : [0],
             individual_feedback: studentFeedbacks.map((s: any) => ({
                 student_id: String(s.student_id || ''),
-                summary: String(s.summary || ''),
-                strengths: Array.isArray(s.strengths) ? s.strengths : [],
-                weaknesses: Array.isArray(s.weaknesses) ? s.weaknesses : [],
+                summary: String(s.summary || 'No summary available'),
+                strengths: Array.isArray(s.strengths) && s.strengths.length > 0 ? s.strengths : ["General performance"],
+                weaknesses: Array.isArray(s.weaknesses) && s.weaknesses.length > 0 ? s.weaknesses : ["Areas for improvement"],
             }))
         };
 
         // 3️⃣ استدعاء AI API
         console.log('Sending payload to AI API:', JSON.stringify(payload, null, 2));
+        console.log('Payload validation:', {
+            hasWrongQuestions: payload.most_wrong_questions.length > 0,
+            hasPrevScores: payload.avg_score_prev.length > 0,
+            hasPrevSuccessRates: payload.success_rate_prev.length > 0,
+            individualFeedbackCount: payload.individual_feedback.length,
+            avgScoreThisQuiz: payload.avg_score_this_quiz,
+            successRateThisQuiz: payload.success_rate_this_quiz
+        });
+
+        // Debug individual student data
+        console.log('Individual student data:', studentFeedbacks.map(s => ({
+            student_id: s.student_id,
+            avg_score_this_quiz: s.avg_score_this_quiz,
+            success_rate_this_quiz: s.success_rate_this_quiz,
+            most_wrong_questions: s.most_wrong_questions,
+            avg_score_prev: s.avg_score_prev,
+            success_rate_prev: s.success_rate_prev
+        })));
         
         let response;
         try {
@@ -1222,24 +1291,84 @@ export class QuizService {
                 {
                     headers: {
                         'Content-Type': 'application/json'
-                    }
+                    },
+                    timeout: 30000 // 30 second timeout
                 }
             );
         } catch (error: any) {
-            console.error('AI API Error:', {
+            console.error('AI API Error Details:', {
                 status: error?.response?.status,
                 statusText: error?.response?.statusText,
                 data: error?.response?.data,
-                message: error?.message
+                message: error?.message,
+                code: error?.code,
+                url: error?.config?.url,
+                payload: error?.config?.data
             });
             
-            throw new InternalServerErrorException(
-                'Failed to generate group feedback: ' + (error?.response?.data?.message || error.message),
-            );
+            // Provide more specific error messages based on the status code
+            let errorMessage = 'Failed to generate group feedback';
+            if (error?.response?.status === 500) {
+                errorMessage = 'AI service is currently unavailable or experiencing issues. Please try again later.';
+            } else if (error?.response?.status === 422) {
+                errorMessage = 'Invalid data format sent to AI service. Please check the quiz data.';
+            } else if (error?.response?.status === 400) {
+                errorMessage = 'Bad request to AI service. Please verify the group and quiz data.';
+            } else if (error?.code === 'ECONNABORTED') {
+                errorMessage = 'Request timeout. AI service is taking too long to respond.';
+            }
+            
+            // If it's a 500 error, we can provide a fallback response
+            if (error?.response?.status === 500) {
+                console.warn('AI service returned 500, providing fallback response');
+                return this.generateFallbackGroupFeedback(payload, studentFeedbacks);
+            }
+            
+            throw new InternalServerErrorException(errorMessage);
         }
 
         const data = response.data || {};
         return data;
+    }
+
+    private generateFallbackGroupFeedback(payload: any, studentFeedbacks: any[]) {
+        // Generate a basic fallback response when AI service is unavailable
+        const avgScore = payload.avg_score_this_quiz;
+        const avgSuccessRate = payload.success_rate_this_quiz;
+        
+        console.log('Fallback response data:', {
+            avgScore,
+            avgSuccessRate,
+            payloadKeys: Object.keys(payload)
+        });
+        
+        let overallSummary = '';
+        if (avgSuccessRate >= 80) {
+            overallSummary = 'The group shows strong performance with high success rates.';
+        } else if (avgSuccessRate >= 60) {
+            overallSummary = 'The group demonstrates moderate performance with room for improvement.';
+        } else {
+            overallSummary = 'The group needs additional support and practice to improve performance.';
+        }
+
+        return {
+            group_summary: overallSummary,
+            average_score: avgScore,
+            average_success_rate: avgSuccessRate,
+            total_students: studentFeedbacks.length,
+            recommendations: [
+                avgSuccessRate < 70 ? 'Consider additional practice sessions' : 'Continue current learning approach',
+                avgSuccessRate < 80 ? 'Focus on fundamental concepts' : 'Introduce advanced topics',
+                'Regular progress monitoring recommended'
+            ],
+            individual_insights: studentFeedbacks.map(student => ({
+                student_id: student.student_id,
+                performance_level: student.success_rate_this_quiz >= 80 ? 'High' : student.success_rate_this_quiz >= 60 ? 'Medium' : 'Low',
+                key_strengths: student.strengths.length > 0 ? student.strengths : ['General competency'],
+                areas_for_improvement: student.weaknesses.length > 0 ? student.weaknesses : ['Overall development']
+            })),
+            note: 'This is a fallback response generated due to AI service unavailability.'
+        };
     }
 
     async finishQuizAttempt(userId: number, quizAttemptId: number) {
