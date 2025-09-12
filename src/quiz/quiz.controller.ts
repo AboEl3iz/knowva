@@ -384,6 +384,24 @@ export class QuizController {
         return await this.quizService.startQuizAttempt(req.user.id, id);
     }
 
+    @Get('attempts/:quizAttemptId/questions')
+    @Roles(Role.STUDENT)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
+    @ApiOperation({ summary: 'Get questions for a quiz attempt' })
+    @ApiParam({ name: 'quizAttemptId', description: 'Quiz Attempt ID' })
+    @ApiResponse({ status: 200, description: 'Questions retrieved successfully' })
+    @ApiResponse({ status: 404, description: 'Quiz attempt not found' })
+    /**
+     * Retrieves questions for a quiz attempt for the authenticated student
+     *
+     * @param quizAttemptId The ID of the quiz attempt to retrieve questions for
+     * @returns The questions for the quiz attempt
+     */
+    async getQuestionsForAttempt(@Param('quizAttemptId', ParseIntPipe) quizAttemptId: number, @Request() req) {
+        return await this.quizService.getQuestionsForAttempt(req.user.id, quizAttemptId);
+    }
+
+
     @Post('attempts/:quizAttemptId/answers')
     @Roles(Role.STUDENT)
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
@@ -452,13 +470,13 @@ export class QuizController {
      *
      * @returns The available quizzes
      */
-     getAvailableQuizzes(@Req() req : any) {
+    getAvailableQuizzes(@Req() req: any) {
 
         console.log('req.user:', req.user);
         console.log('req.user.id:', req.user.id);
         console.log('typeof req.user.id:', typeof req.user.id);
         console.log('converted:', +req.user.id);
-        return  this.quizService.getAvailableQuizzes(req.user.id);
+        return this.quizService.getAvailableQuizzes(req.user.id);
     }
 
 
