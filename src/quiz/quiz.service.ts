@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, BadRequestException, Logger, ForbiddenException, NotFoundException, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, BadRequestException, Logger, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import { CreateQuizDto } from './dto/create-quiz.dto';
 import { UpdateQuizDto } from './dto/update-quiz.dto';
@@ -16,27 +16,34 @@ import { NotificationGateway } from 'src/notification/notification.gateway';
 import { WrittenQuestionPayload } from 'src/helper/interfaces/interfaces.response';
 import { ConfigService } from '@nestjs/config';
 @Injectable()
-export class QuizService implements OnModuleDestroy {
-    private autoSubmitTimeouts = new Map<number, NodeJS.Timeout>();
-
+export class QuizService {
     constructor(private prisma: PrismaService, private notifications: NotificationService,
         private readonly notificationGateway: NotificationGateway,
         private readonly config: ConfigService
         // private readonly http: HttpService,
     ) { }
 
+    private getCurrentUTCTime(): Date {
+        const now = new Date();
+        return new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+    }
+
+    private getQuizStatus(startsAt: Date, endsAt: Date): "UPCOMING" | "ONGOING" | "ENDED" {
+        const nowUTC = this.getCurrentUTCTime();
+        if (startsAt > nowUTC) {
+            return "UPCOMING";
+        } else if (endsAt > nowUTC) {
+            return "ONGOING";
+        } else {
+            return "ENDED";
+        }
+    }
+
     async getQuizes(userId: number) {
         let quizzes = await this.prisma.quiz.findMany({ where: { createdById: userId } });
         return quizzes.map(
             (q) => {
-                let currentStatus: "UPCOMING" | "ONGOING" | "ENDED";
-                if (new Date(q.startsAt) > new Date()) {
-                    currentStatus = "UPCOMING";
-                } else if (new Date(q.endsAt) > new Date()) {
-                    currentStatus = "ONGOING";
-                } else {
-                    currentStatus = "ENDED";
-                }
+                const currentStatus = this.getQuizStatus(q.startsAt, q.endsAt);
                 return {
                     ...q,
                     currentStatus
@@ -59,14 +66,7 @@ export class QuizService implements OnModuleDestroy {
 
         if (!quiz) throw new BadRequestException('Quiz not found');
 
-        let currentStatus: "UPCOMING" | "ONGOING" | "ENDED";
-        if (new Date(quiz.startsAt) > new Date()) {
-            currentStatus = "UPCOMING";
-        } else if (new Date(quiz.endsAt) > new Date()) {
-            currentStatus = "ONGOING";
-        } else {
-            currentStatus = "ENDED";
-        }
+        const currentStatus = this.getQuizStatus(quiz.startsAt, quiz.endsAt);
 
         return {
             ...quiz,
@@ -83,7 +83,8 @@ export class QuizService implements OnModuleDestroy {
         if (!subject) throw new BadRequestException('Subject not found');
         let group = await this.prisma.group.findUnique({ where: { id: createQuizDto.groupId } });
         if (!group) throw new BadRequestException('Group not found');
-        const isActive = new Date(createQuizDto.startsAt) <= new Date();
+        const nowUTC = this.getCurrentUTCTime();
+        const isActive = new Date(createQuizDto.startsAt) <= nowUTC;
         const quiz = await this.prisma.quiz.create({
             data: {
                 ...createQuizDto, createdById: userId, isActive, status: 'DRAFT' as any, startsAt: new Date(createQuizDto.startsAt),
@@ -101,7 +102,8 @@ export class QuizService implements OnModuleDestroy {
         // recalc isActive if startsAt updated
         let data: any = { ...updateQuizDto };
         if (updateQuizDto.startsAt) {
-            data.isActive = new Date(updateQuizDto.startsAt) <= new Date();
+            const nowUTC = this.getCurrentUTCTime();
+            data.isActive = new Date(updateQuizDto.startsAt) <= nowUTC;
         }
         const quiz = await this.prisma.quiz.update({ where: { id }, data });
         return quiz;
@@ -126,14 +128,7 @@ export class QuizService implements OnModuleDestroy {
         let quizzes = await this.prisma.quiz.findMany({ where: { createdById: userId, status: 'DRAFT' as any } });
         return quizzes.map(
             (q) => {
-                let currentStatus: "UPCOMING" | "ONGOING" | "ENDED";
-                if (new Date(q.startsAt) > new Date()) {
-                    currentStatus = "UPCOMING";
-                } else if (new Date(q.endsAt) > new Date()) {
-                    currentStatus = "ONGOING";
-                } else {
-                    currentStatus = "ENDED";
-                }
+                const currentStatus = this.getQuizStatus(q.startsAt, q.endsAt);
                 return {
                     ...q,
                     currentStatus
@@ -146,14 +141,7 @@ export class QuizService implements OnModuleDestroy {
         let quizzes = await this.prisma.quiz.findMany({ where: { createdById: userId, status: 'PUBLIC' as any } });
         return quizzes.map(
             (q) => {
-                let currentStatus: "UPCOMING" | "ONGOING" | "ENDED";
-                if (new Date(q.startsAt) > new Date()) {
-                    currentStatus = "UPCOMING";
-                } else if (new Date(q.endsAt) > new Date()) {
-                    currentStatus = "ONGOING";
-                } else {
-                    currentStatus = "ENDED";
-                }
+                const currentStatus = this.getQuizStatus(q.startsAt, q.endsAt);
                 return {
                     ...q,
                     currentStatus
@@ -482,9 +470,6 @@ export class QuizService implements OnModuleDestroy {
             throw new InternalServerErrorException('Quiz attempt not found');
         }
 
-        // Cancel auto-submit timeout if it exists
-        this.cancelAutoSubmit(quizAttemptId);
-
         let totalScore = 0;
         const results: any[] = [];
 
@@ -650,7 +635,7 @@ export class QuizService implements OnModuleDestroy {
                         "AI correction service is temporarily unavailable. Please try again later."
                     );
                 } else if (error.response?.status >= 400 && error.response?.status < 500) {
-                    throw new BadRequestException(
+                throw new BadRequestException(
                         "AI correction failed: " + (error.response?.data?.message || error.response?.data?.error || error.message)
                     );
                 } else {
@@ -674,9 +659,10 @@ export class QuizService implements OnModuleDestroy {
             resultsCount: results.length
         });
 
+        const nowUTC = this.getCurrentUTCTime();
         const updatedAttempt = await this.prisma.quizAttempt.update({
             where: { id: quizAttemptId },
-            data: { score: totalScore, endedAt: new Date() }
+            data: { score: totalScore, endedAt: nowUTC }
         });
 
         return {
@@ -972,131 +958,35 @@ export class QuizService implements OnModuleDestroy {
         if (quiz.status !== 'PUBLIC') {
             throw new BadRequestException('Quiz is not published');
         }
-        if (quiz.startsAt > new Date() || quiz.endsAt <= new Date()) {
-            throw new BadRequestException('Quiz is not available');
-        }
 
-        // Check if student already has an attempt for this quiz
-        const existingAttempt = await this.prisma.quizAttempt.findFirst({
-            where: { quizId, studentId: userId }
+        const now = new Date();
+        const nowUTC = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+        
+        console.log('startQuizAttempt - Date validation:', {
+            quizId: quizId,
+            userId: userId,
+            quizStartsAt: quiz.startsAt.toISOString(),
+            quizEndsAt: quiz.endsAt.toISOString(),
+            currentTime: nowUTC.toISOString(),
+            isQuizStarted: quiz.startsAt <= nowUTC,
+            isQuizEnded: quiz.endsAt <= nowUTC
         });
 
-        if (existingAttempt) {
-            if (existingAttempt.endedAt) {
-                throw new BadRequestException('You have already completed this quiz');
-            } else {
-                // Return existing attempt if it's still in progress
-                return existingAttempt;
-            }
+        if (quiz.startsAt > nowUTC || quiz.endsAt <= nowUTC) {
+            throw new BadRequestException('Quiz is not available');
         }
-
+        
         const attempt = await this.prisma.quizAttempt.create({ 
             data: { 
                 quizId, 
                 studentId: userId, 
-                startedAt: new Date() 
+                startedAt: nowUTC 
             } 
         });
-
-        // Schedule auto-submit after duration expires
-        this.scheduleAutoSubmit(attempt.id, quiz.durationMins);
-
+        
         await this.notifications.create(quiz.createdById, `Student ${userId} started quiz: ${quiz.title}`, NotificationType.QUIZ_ASSIGNED);
         this.notificationGateway.sendNotification(quiz.createdById.toString(), `Student ${userId} started quiz: ${quiz.title}`);
         return attempt;
-    }
-
-    private scheduleAutoSubmit(attemptId: number, durationMins: number) {
-        const timeoutMs = durationMins * 60 * 1000; // Convert minutes to milliseconds
-        
-        const timeout = setTimeout(async () => {
-            try {
-                await this.autoSubmitQuiz(attemptId);
-            } catch (error) {
-                console.error(`Failed to auto-submit quiz attempt ${attemptId}:`, error);
-            } finally {
-                this.autoSubmitTimeouts.delete(attemptId);
-            }
-        }, timeoutMs);
-
-        this.autoSubmitTimeouts.set(attemptId, timeout);
-        console.log(`Scheduled auto-submit for attempt ${attemptId} in ${durationMins} minutes`);
-    }
-
-    private async autoSubmitQuiz(attemptId: number) {
-        const attempt = await this.prisma.quizAttempt.findUnique({
-            where: { id: attemptId },
-            include: {
-                studentAnswers: { include: { question: true } },
-                quiz: true
-            }
-        });
-
-        if (!attempt) {
-            console.log(`Attempt ${attemptId} not found for auto-submit`);
-            return;
-        }
-
-        if (attempt.endedAt) {
-            console.log(`Attempt ${attemptId} already completed`);
-            return;
-        }
-
-        console.log(`Auto-submitting quiz attempt ${attemptId} for student ${attempt.studentId}`);
-        
-        // Use the existing completeQuizAttempt logic
-        await this.completeQuizAttempt(attemptId, attempt.studentId);
-        
-        // Send notification to student about auto-submission
-        await this.notifications.create(
-            attempt.studentId, 
-            `Your quiz "${attempt.quiz.title}" has been automatically submitted due to time limit`, 
-            NotificationType.QUIZ_ASSIGNED
-        );
-        
-        this.notificationGateway.sendNotification(
-            attempt.studentId.toString(), 
-            `Your quiz "${attempt.quiz.title}" has been automatically submitted due to time limit`
-        );
-    }
-
-    private cancelAutoSubmit(attemptId: number) {
-        const timeout = this.autoSubmitTimeouts.get(attemptId);
-        if (timeout) {
-            clearTimeout(timeout);
-            this.autoSubmitTimeouts.delete(attemptId);
-            console.log(`Cancelled auto-submit for attempt ${attemptId}`);
-        }
-    }
-
-    async getQuizAttemptTimeRemaining(quizAttemptId: number, userId: number) {
-        const attempt = await this.prisma.quizAttempt.findFirst({
-            where: { id: quizAttemptId, studentId: userId },
-            include: { quiz: true }
-        });
-
-        if (!attempt) {
-            throw new BadRequestException('Quiz attempt not found');
-        }
-
-        if (attempt.endedAt) {
-            return { timeRemaining: 0, isCompleted: true };
-        }
-
-        const startTime = new Date(attempt.startedAt);
-        const durationMs = attempt.quiz.durationMins * 60 * 1000;
-        const endTime = new Date(startTime.getTime() + durationMs);
-        const now = new Date();
-        
-        const timeRemaining = Math.max(0, endTime.getTime() - now.getTime());
-        const timeRemainingMinutes = Math.ceil(timeRemaining / (60 * 1000));
-
-        return {
-            timeRemaining: timeRemainingMinutes,
-            isCompleted: false,
-            startedAt: attempt.startedAt,
-            durationMins: attempt.quiz.durationMins
-        };
     }
 
     async getQuestionsForAttempt(userId: number, quizAttemptId: number) {
@@ -1113,8 +1003,6 @@ export class QuizService implements OnModuleDestroy {
             score : true,
             answer: true,
             
-
-
         }
         });
     }
@@ -1174,11 +1062,20 @@ export class QuizService implements OnModuleDestroy {
 
 
     getAvailableQuizzes(userId: string) {
+        const now = new Date();
+        const nowUTC = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+        
+        console.log('getAvailableQuizzes - Date comparison:', {
+            localTime: now.toISOString(),
+            utcTime: nowUTC.toISOString(),
+            userId: userId
+        });
+
         return this.prisma.quiz.findMany({
             where: {
                 isActive: true,
-                startsAt: { lte: new Date() },
-                endsAt: { gt: new Date() },
+                startsAt: { lte: nowUTC },
+                endsAt: { gt: nowUTC },
                 group: {
                     memberships: {
                         some: {
@@ -1649,15 +1546,6 @@ export class QuizService implements OnModuleDestroy {
         await this.prisma.quizAttempt.update({ where: { id: quizAttemptId }, data: { score } });
         await this.notifications.create(userId, `Your results for quiz "${attempt.quiz.title}": ${score}/${total}`, NotificationType.QUIZ_COMPLETED);
         this.notificationGateway.sendNotification(userId.toString(), `Your results for quiz "${attempt.quiz.title}": ${score}/${total}`);
-        return { score, total         };
-    }
-
-    onModuleDestroy() {
-        // Clear all auto-submit timeouts when the module is destroyed
-        for (const [attemptId, timeout] of this.autoSubmitTimeouts) {
-            clearTimeout(timeout);
-            console.log(`Cleared auto-submit timeout for attempt ${attemptId} during shutdown`);
-        }
-        this.autoSubmitTimeouts.clear();
+        return { score, total };
     }
 }

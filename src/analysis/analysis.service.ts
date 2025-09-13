@@ -5,6 +5,16 @@ import { PrismaService } from 'src/database/prisma.service';
 export class AnalysisService {
   constructor(private prisma: PrismaService) { }
 
+  private getCurrentUTCTime(): Date {
+    // Get current time and convert to UTC properly
+    const now = new Date();
+    return new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+  }
+
+  private formatDateForComparison(date: Date): string {
+    return date.toISOString().split('.')[0] + 'Z'; // Remove milliseconds for cleaner comparison
+  }
+
   /**
    * Helper: Calculate passing score for a quiz
    */
@@ -493,35 +503,62 @@ export class AnalysisService {
     return {results, n_exams_oncoming, n_exams_ended , n_exams_onging};
   }
    async getNextDueQuiz(userId: number) {
+        // Use more accurate date handling with proper UTC conversion
         const now = new Date();
+        const nowUTC = this.getCurrentUTCTime();
+        
+        console.log('getNextDueQuiz - Date comparison:', {
+            localTime: this.formatDateForComparison(now),
+            utcTime: this.formatDateForComparison(nowUTC),
+            userId: userId,
+            timezoneOffset: now.getTimezoneOffset()
+        });
+
         // Prefer currently ongoing quizzes
         const ongoing = await this.prisma.quiz.findFirst({
             where: {
                 isActive: true,
-                startsAt: { lte: now },
-                endsAt: { gt: now },
+                startsAt: { lte: nowUTC },
+                endsAt: { gt: nowUTC },
                 status: 'PUBLIC' as any,
                 group: {
                     memberships: {
                         some: { studentId: userId, status: 'APPROVED' }
-                    },
-
-                    
-                },
-                
+                    }
+                }
             },
             orderBy: { startsAt: 'asc' },
-            include: { group: {
-              select: { id: true, name: true , status: true }
-            }, subject: true }
+            include: { 
+                group: {
+                    select: { id: true, name: true, status: true }
+                }, 
+                subject: true 
+            }
         });
-        // Logger.debug(ongoing);
-        if (ongoing) return {...ongoing , currentStatus: 'ONGOING'};
+
+        console.log('Ongoing quiz found:', ongoing ? {
+            id: ongoing.id,
+            title: ongoing.title,
+            startsAt: this.formatDateForComparison(ongoing.startsAt),
+            endsAt: this.formatDateForComparison(ongoing.endsAt),
+            currentTime: this.formatDateForComparison(nowUTC),
+            isActive: ongoing.isActive,
+            status: ongoing.status
+        } : 'No ongoing quiz');
+
+        if (ongoing) {
+            return {
+                ...ongoing,
+                currentStatus: 'ONGOING',
+                timeRemaining: Math.max(0, Math.floor((ongoing.endsAt.getTime() - nowUTC.getTime()) / (1000 * 60))), // minutes remaining
+                timeUntilStart: Math.max(0, Math.floor((ongoing.startsAt.getTime() - nowUTC.getTime()) / (1000 * 60))) // minutes until start
+            };
+        }
 
         // Otherwise, return the next upcoming published quiz
         const upcoming = await this.prisma.quiz.findFirst({
             where: {
-                startsAt: { gt: now },
+                startsAt: { gt: nowUTC },
                 status: 'PUBLIC' as any,
                 group: {
                     memberships: {
@@ -532,11 +569,29 @@ export class AnalysisService {
             orderBy: { startsAt: 'asc' },
             include: { group: true, subject: true }
         });
-        // Logger.debug(upcoming);
-        if(!upcoming) return { "message": "No quizzes upcoming for you" };
+
+        console.log('Upcoming quiz found:', upcoming ? {
+            id: upcoming.id,
+            title: upcoming.title,
+            startsAt: this.formatDateForComparison(upcoming.startsAt),
+            endsAt: this.formatDateForComparison(upcoming.endsAt),
+            currentTime: this.formatDateForComparison(nowUTC),
+            isActive: upcoming.isActive,
+            status: upcoming.status
+        } : 'No upcoming quiz');
+
+        if (!upcoming) {
+            return { 
+                message: "No quizzes upcoming for you",
+                currentTime: this.formatDateForComparison(nowUTC)
+            };
+        }
+
         return {
             ...upcoming,
             currentStatus: 'UPCOMING',
+            timeUntilStart: Math.max(0, Math.floor((upcoming.startsAt.getTime() - nowUTC.getTime()) / (1000 * 60))), // minutes until start
+            durationMins: upcoming.durationMins || 60 // fallback duration
         };
     }
 }
