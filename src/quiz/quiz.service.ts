@@ -895,8 +895,17 @@ export class QuizService {
         return (this.prisma as any).question.delete({ where: { id: questionId, createdById: userId } });
     }
 
-    async getMyQuizAttempts(userId: number, quizId: number) {
-        return await this.prisma.quizAttempt.findMany({ where: { studentId: userId, quizId } });
+    async getMyQuizAttempts(userId: number) {
+        return await this.prisma.quizAttempt.findMany({ where: { studentId: userId } });
+    }
+
+    async getMyQuizAttempt(userId: number, attemptId: number) {
+        return await this.prisma.quizAttempt.findFirst({
+            where: { studentId: userId, id: attemptId }, include: {
+                studentAnswers: { include: { question: true } },
+                quiz: { include: { questions: true } }
+            }
+        });
     }
 
     async getQuizAttempts(quizId: number, userId: number) {
