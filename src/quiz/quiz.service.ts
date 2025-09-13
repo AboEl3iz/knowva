@@ -539,13 +539,51 @@ export class QuizService {
 
         if (writtenPayload.questions.length > 0) {
             try {
+                console.log('Sending written questions to AI for correction:', {
+                    questionCount: writtenPayload.questions.length,
+                    maxGrade: writtenPayload.max_grade,
+                    questions: writtenPayload.questions.map(q => ({
+                        question_id: q.question_id,
+                        student_id: q.student_id,
+                        group_id: q.group_id,
+                        exam_id: q.exam_id
+                    }))
+                });
+
                 const aiResponse = await axios.post(
                     "https://8080-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/correct_quiz/",
                     writtenPayload
                 );
 
+                // Validate AI response structure
+                if (!aiResponse.data || !Array.isArray(aiResponse.data)) {
+                    console.error('Invalid AI response structure:', aiResponse.data);
+                    throw new InternalServerErrorException(
+                        "AI correction service returned invalid response format"
+                    );
+                }
+
+                console.log('AI correction response received:', {
+                    responseCount: aiResponse.data.length,
+                    questions: aiResponse.data.map(q => ({
+                        question_id: q.question_id,
+                        score: q.score
+                    }))
+                });
+
                 for (const q of aiResponse.data) {
+                    // Validate individual question response
+                    if (!q.question_id || q.score === undefined || q.score === null) {
+                        console.error('Invalid question response from AI:', q);
+                        continue; // Skip this question and continue with others
+                    }
+
                     const questionId = parseInt(q.question_id);
+                    if (isNaN(questionId)) {
+                        console.error('Invalid question_id format:', q.question_id);
+                        continue;
+                    }
+
                     const questionInDb = attempt.studentAnswers.find(ans => ans.questionId === questionId)?.question;
 
                     const maxScore = questionInDb?.score ?? 3; // Default score if not found
@@ -594,9 +632,27 @@ export class QuizService {
                 }
 
             } catch (error) {
-                throw new BadRequestException(
-                    "AI correction failed: " + (error.response?.data?.message || error.message)
-                );
+                console.error('AI correction API error:', {
+                    status: error.response?.status,
+                    statusText: error.response?.statusText,
+                    data: error.response?.data,
+                    message: error.message
+                });
+
+                // Handle different types of errors
+                if (error.response?.status === 500) {
+                    throw new InternalServerErrorException(
+                        "AI correction service is temporarily unavailable. Please try again later."
+                    );
+                } else if (error.response?.status >= 400 && error.response?.status < 500) {
+                    throw new BadRequestException(
+                        "AI correction failed: " + (error.response?.data?.message || error.response?.data?.error || error.message)
+                    );
+                } else {
+                    throw new InternalServerErrorException(
+                        "AI correction failed: " + (error.message || "Unknown error occurred")
+                    );
+                }
             }
         }
 
