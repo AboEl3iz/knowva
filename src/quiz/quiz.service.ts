@@ -995,14 +995,30 @@ export class QuizService {
     }
 
     async getMyQuizAttempts(userId: number) {
-        return await this.prisma.quizAttempt.findMany({ where: { studentId: userId } });
+        return await this.prisma.quizAttempt.findMany({ where: { studentId: userId }
+        , include: {
+            studentAnswers: { include: { question: true } },
+            quiz: { include: { questions: { include: { question: true } } } }
+        }
+        
+        });
     }
 
     async getMyQuizAttempt(userId: number, attemptId: number) {
         return await this.prisma.quizAttempt.findFirst({
             where: { studentId: userId, id: attemptId }, include: {
                 studentAnswers: { include: { question: true } },
-                quiz: { include: { questions: true } }
+                quiz: { include: { questions: {
+                    include: { question : {
+                        select: {
+                            type: true,
+                            question: true,
+                            options : true,
+                            mode: true,
+                            score : true
+                        }
+                    } }
+                } } }
             }
         });
     }

@@ -5,7 +5,7 @@ import { Roles } from 'src/decorator/decorator/roles.decorator';
 import { Role } from 'src/decorator/enums/roles';
 import { AuthenticationGuard } from 'src/guards/authentication.guard';
 import { AuthorizationGuard } from 'src/guards/authorization.guard';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 @ApiTags('Analysis')
 @ApiBearerAuth()
 @Controller('analysis')
@@ -40,6 +40,7 @@ export class AnalysisController {
 
   // /analysis/exams/:id/analysis
   @Get('exams/:id/analysis')
+  @ApiParam({ name: 'id', type: 'number' })
   @ApiOperation({ summary: 'Retrieves analysis data for a given exam' })
   /**
    * Retrieves analysis data for a given exam
@@ -47,9 +48,9 @@ export class AnalysisController {
    * @param passing The passing threshold (optional, defaults to 50) for the exam
    * @returns Analysis data for the given exam
    */
-  getExamAnalysis(@Param('id', ParseIntPipe) id: number, @Query('passing') passing?: string) {
-    const passingThreshold = passing ? parseFloat(passing) : 50;
-    return this.analysisService.getExamAnalysis(id, passingThreshold);
+  getExamAnalysis(@Param('id', ParseIntPipe) id: number) {
+    // const passingThreshold = passing ? parseFloat(passing) : 50;
+    return this.analysisService.getExamAnalysis(id);
   }
 
   @Get('stats')
@@ -146,7 +147,7 @@ export class AnalysisController {
         return  this.analysisService.getNextDueQuiz(+req.user.id);
     }
 
-  @Get('last-ended')
+    @Get('last-ended')
     @Roles(Role.STUDENT)
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get the last ended exam for the logged-in student' })
