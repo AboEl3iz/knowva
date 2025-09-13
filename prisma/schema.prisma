@@ -288,6 +288,8 @@ model QuizAttempt {
   endedAt        DateTime?
 
   feedback AttemptFeedback?
+
+  @@unique([quizId, studentId])
 }
 
 model QuestionAnswer {

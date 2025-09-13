@@ -618,6 +618,37 @@ export class QuizController {
         return await this.quizService.completeQuizAttempt(quizAttemptId, req.user.id);
     }
 
+    @Get('attempts/:quizAttemptId/time-remaining')
+    @Roles(Role.STUDENT)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
+    @ApiOperation({ summary: 'Get remaining time for a quiz attempt' })
+    @ApiParam({ name: 'quizAttemptId', description: 'Quiz Attempt ID' })
+    @ApiResponse({
+        status: 200,
+        description: 'Time remaining information retrieved successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                timeRemaining: { type: 'number', description: 'Time remaining in minutes' },
+                isCompleted: { type: 'boolean', description: 'Whether the quiz is completed' },
+                startedAt: { type: 'string', format: 'date-time', description: 'When the attempt started' },
+                durationMins: { type: 'number', description: 'Total duration in minutes' }
+            }
+        }
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Student role required' })
+    @ApiResponse({ status: 404, description: 'Quiz attempt not found' })
+    /**
+     * Gets the remaining time for a quiz attempt
+     *
+     * @param quizAttemptId The ID of the quiz attempt
+     * @returns Time remaining information
+     */
+    async getQuizAttemptTimeRemaining(@Param('quizAttemptId', ParseIntPipe) quizAttemptId: number, @Request() req) {
+        return await this.quizService.getQuizAttemptTimeRemaining(quizAttemptId, req.user.id);
+    }
+
     @Get('attempts/:quizAttemptId')
     @Roles(Role.STUDENT)
     @UseGuards(AuthenticationGuard, AuthorizationGuard)

@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, BadRequestException, Logger, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, BadRequestException, Logger, ForbiddenException, NotFoundException, OnModuleDestroy } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import { CreateQuizDto } from './dto/create-quiz.dto';
 import { UpdateQuizDto } from './dto/update-quiz.dto';
@@ -16,7 +16,9 @@ import { NotificationGateway } from 'src/notification/notification.gateway';
 import { WrittenQuestionPayload } from 'src/helper/interfaces/interfaces.response';
 import { ConfigService } from '@nestjs/config';
 @Injectable()
-export class QuizService {
+export class QuizService implements OnModuleDestroy {
+    private autoSubmitTimeouts = new Map<number, NodeJS.Timeout>();
+
     constructor(private prisma: PrismaService, private notifications: NotificationService,
         private readonly notificationGateway: NotificationGateway,
         private readonly config: ConfigService
@@ -479,6 +481,9 @@ export class QuizService {
         if (!attempt) {
             throw new InternalServerErrorException('Quiz attempt not found');
         }
+
+        // Cancel auto-submit timeout if it exists
+        this.cancelAutoSubmit(quizAttemptId);
 
         let totalScore = 0;
         const results: any[] = [];
@@ -970,10 +975,128 @@ export class QuizService {
         if (quiz.startsAt > new Date() || quiz.endsAt <= new Date()) {
             throw new BadRequestException('Quiz is not available');
         }
-        const attempt = await this.prisma.quizAttempt.create({ data: { quizId, studentId: userId, startedAt: new Date() } });
+
+        // Check if student already has an attempt for this quiz
+        const existingAttempt = await this.prisma.quizAttempt.findFirst({
+            where: { quizId, studentId: userId }
+        });
+
+        if (existingAttempt) {
+            if (existingAttempt.endedAt) {
+                throw new BadRequestException('You have already completed this quiz');
+            } else {
+                // Return existing attempt if it's still in progress
+                return existingAttempt;
+            }
+        }
+
+        const attempt = await this.prisma.quizAttempt.create({ 
+            data: { 
+                quizId, 
+                studentId: userId, 
+                startedAt: new Date() 
+            } 
+        });
+
+        // Schedule auto-submit after duration expires
+        this.scheduleAutoSubmit(attempt.id, quiz.durationMins);
+
         await this.notifications.create(quiz.createdById, `Student ${userId} started quiz: ${quiz.title}`, NotificationType.QUIZ_ASSIGNED);
         this.notificationGateway.sendNotification(quiz.createdById.toString(), `Student ${userId} started quiz: ${quiz.title}`);
         return attempt;
+    }
+
+    private scheduleAutoSubmit(attemptId: number, durationMins: number) {
+        const timeoutMs = durationMins * 60 * 1000; // Convert minutes to milliseconds
+        
+        const timeout = setTimeout(async () => {
+            try {
+                await this.autoSubmitQuiz(attemptId);
+            } catch (error) {
+                console.error(`Failed to auto-submit quiz attempt ${attemptId}:`, error);
+            } finally {
+                this.autoSubmitTimeouts.delete(attemptId);
+            }
+        }, timeoutMs);
+
+        this.autoSubmitTimeouts.set(attemptId, timeout);
+        console.log(`Scheduled auto-submit for attempt ${attemptId} in ${durationMins} minutes`);
+    }
+
+    private async autoSubmitQuiz(attemptId: number) {
+        const attempt = await this.prisma.quizAttempt.findUnique({
+            where: { id: attemptId },
+            include: {
+                studentAnswers: { include: { question: true } },
+                quiz: true
+            }
+        });
+
+        if (!attempt) {
+            console.log(`Attempt ${attemptId} not found for auto-submit`);
+            return;
+        }
+
+        if (attempt.endedAt) {
+            console.log(`Attempt ${attemptId} already completed`);
+            return;
+        }
+
+        console.log(`Auto-submitting quiz attempt ${attemptId} for student ${attempt.studentId}`);
+        
+        // Use the existing completeQuizAttempt logic
+        await this.completeQuizAttempt(attemptId, attempt.studentId);
+        
+        // Send notification to student about auto-submission
+        await this.notifications.create(
+            attempt.studentId, 
+            `Your quiz "${attempt.quiz.title}" has been automatically submitted due to time limit`, 
+            NotificationType.QUIZ_ASSIGNED
+        );
+        
+        this.notificationGateway.sendNotification(
+            attempt.studentId.toString(), 
+            `Your quiz "${attempt.quiz.title}" has been automatically submitted due to time limit`
+        );
+    }
+
+    private cancelAutoSubmit(attemptId: number) {
+        const timeout = this.autoSubmitTimeouts.get(attemptId);
+        if (timeout) {
+            clearTimeout(timeout);
+            this.autoSubmitTimeouts.delete(attemptId);
+            console.log(`Cancelled auto-submit for attempt ${attemptId}`);
+        }
+    }
+
+    async getQuizAttemptTimeRemaining(quizAttemptId: number, userId: number) {
+        const attempt = await this.prisma.quizAttempt.findFirst({
+            where: { id: quizAttemptId, studentId: userId },
+            include: { quiz: true }
+        });
+
+        if (!attempt) {
+            throw new BadRequestException('Quiz attempt not found');
+        }
+
+        if (attempt.endedAt) {
+            return { timeRemaining: 0, isCompleted: true };
+        }
+
+        const startTime = new Date(attempt.startedAt);
+        const durationMs = attempt.quiz.durationMins * 60 * 1000;
+        const endTime = new Date(startTime.getTime() + durationMs);
+        const now = new Date();
+        
+        const timeRemaining = Math.max(0, endTime.getTime() - now.getTime());
+        const timeRemainingMinutes = Math.ceil(timeRemaining / (60 * 1000));
+
+        return {
+            timeRemaining: timeRemainingMinutes,
+            isCompleted: false,
+            startedAt: attempt.startedAt,
+            durationMins: attempt.quiz.durationMins
+        };
     }
 
     async getQuestionsForAttempt(userId: number, quizAttemptId: number) {
@@ -1526,6 +1649,15 @@ export class QuizService {
         await this.prisma.quizAttempt.update({ where: { id: quizAttemptId }, data: { score } });
         await this.notifications.create(userId, `Your results for quiz "${attempt.quiz.title}": ${score}/${total}`, NotificationType.QUIZ_COMPLETED);
         this.notificationGateway.sendNotification(userId.toString(), `Your results for quiz "${attempt.quiz.title}": ${score}/${total}`);
-        return { score, total };
+        return { score, total         };
+    }
+
+    onModuleDestroy() {
+        // Clear all auto-submit timeouts when the module is destroyed
+        for (const [attemptId, timeout] of this.autoSubmitTimeouts) {
+            clearTimeout(timeout);
+            console.log(`Cleared auto-submit timeout for attempt ${attemptId} during shutdown`);
+        }
+        this.autoSubmitTimeouts.clear();
     }
 }
