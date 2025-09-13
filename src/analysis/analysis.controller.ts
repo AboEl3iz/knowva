@@ -145,4 +145,28 @@ export class AnalysisController {
 
         return  this.analysisService.getNextDueQuiz(+req.user.id);
     }
+
+  @Get('last-ended')
+    @Roles(Role.STUDENT)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
+    @ApiOperation({ summary: 'Get the last ended exam for the logged-in student' })
+    @ApiResponse({ status: 200, description: 'Last ended exam or message if none' })
+    /**
+     * Returns the last exam that has ended for the authenticated student
+     */
+    async getLastEndedExam(@Req() req : any) {
+        return this.analysisService.getLastEndedExam(+req.user.id);
+    }
+
+  @Get('all-ended')
+    @Roles(Role.STUDENT)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
+    @ApiOperation({ summary: 'Get all ended exams for the logged-in student' })
+    @ApiResponse({ status: 200, description: 'All ended exams or message if none' })
+    /**
+     * Returns all exams that have ended for the authenticated student
+     */
+    async getAllEndedExams(@Req() req : any) {
+        return this.analysisService.getAllEndedExams(+req.user.id);
+    }
 }

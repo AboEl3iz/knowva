@@ -14,34 +14,41 @@ import { QuestionMode, QuestionType, NotificationType } from '@prisma/client';
 import { NotificationService } from 'src/notification/notification.service';
 import { NotificationGateway } from 'src/notification/notification.gateway';
 import { WrittenQuestionPayload } from 'src/helper/interfaces/interfaces.response';
+import { TimezoneService } from 'src/common/timezone.service';
 import { ConfigService } from '@nestjs/config';
 @Injectable()
 export class QuizService {
-    constructor(private prisma: PrismaService, private notifications: NotificationService,
+    constructor(
+        private prisma: PrismaService, 
+        private notifications: NotificationService,
         private readonly notificationGateway: NotificationGateway,
-        private readonly config: ConfigService
+        private readonly config: ConfigService,
+        private readonly timezoneService: TimezoneService
         // private readonly http: HttpService,
     ) { }
 
+    // استخدام الخدمة الموحدة للtimezone
     private getCurrentUTCTime(): Date {
-        // Get current time and convert to Egypt timezone (UTC+2)
-        const now = new Date();
-        // Convert to Egypt time by adding 2 hours to UTC
-        // Egypt Standard Time is UTC+2
-        const egyptTime = new Date(now.getTime() + (2 * 60 * 60 * 1000));
-        return egyptTime;
+        return this.timezoneService.getCurrentUTCTime();
     }
 
-    private getQuizStatus(startsAt: Date, endsAt: Date): "UPCOMING" | "ONGOING" | "ENDED" {
-        const nowUTC = this.getCurrentUTCTime();
-        if (startsAt > nowUTC) {
+    private getQuizStatus(
+        startsAt: Date,
+        endsAt: Date
+    ): "UPCOMING" | "ONGOING" | "ENDED" {
+        const nowUTC = new Date(); // always use UTC (matches DB)
+
+        if (nowUTC < startsAt) {
             return "UPCOMING";
-        } else if (endsAt > nowUTC) {
-            return "ONGOING";
-        } else {
-            return "ENDED";
         }
+
+        if (nowUTC >= startsAt && nowUTC < endsAt) {
+            return "ONGOING";
+        }
+
+        return "ENDED";
     }
+
 
     async getQuizes(userId: number) {
         let quizzes = await this.prisma.quiz.findMany({ where: { createdById: userId } });
@@ -77,42 +84,63 @@ export class QuizService {
             currentStatus,
         };
     }
-
+    // تم حذف الطرق القديمة واستبدالها بخدمة timezone موحدة
 
     async createQuiz(userId: number, createQuizDto: CreateQuizDto) {
-        // Convert input dates to Egypt timezone for proper comparison
-        // If the input date doesn't have timezone info, assume it's Egypt time
-        let startsAtEgypt = new Date(createQuizDto.startsAt);
-        let endsAtEgypt = new Date(createQuizDto.endsAt);
-        
-        // If the date string doesn't end with 'Z', assume it's Egypt time and convert to UTC
+        const startsAtEgypt = new Date(createQuizDto.startsAt);
+        const endsAtEgypt = new Date(createQuizDto.endsAt);
+
+        let startsAtUTC: Date;
+        let endsAtUTC: Date;
+
         if (!createQuizDto.startsAt.endsWith('Z')) {
-            // Subtract 2 hours to convert Egypt time to UTC for storage
-            startsAtEgypt = new Date(startsAtEgypt.getTime() - (2 * 60 * 60 * 1000));
+            startsAtUTC = this.timezoneService.convertEgyptTimeToUTC(startsAtEgypt);
+        } else {
+            startsAtUTC = startsAtEgypt;
         }
+
         if (!createQuizDto.endsAt.endsWith('Z')) {
-            // Subtract 2 hours to convert Egypt time to UTC for storage
-            endsAtEgypt = new Date(endsAtEgypt.getTime() - (2 * 60 * 60 * 1000));
+            endsAtUTC = this.timezoneService.convertEgyptTimeToUTC(endsAtEgypt);
+        } else {
+            endsAtUTC = endsAtEgypt;
         }
-        
-        if (endsAtEgypt <= startsAtEgypt) {
+
+        if (endsAtUTC <= startsAtUTC) {
             throw new BadRequestException('endsAt must be after startsAt');
         }
-        let subject = await this.prisma.subject.findUnique({ where: { id: createQuizDto.subjectId } });
+
+        const subject = await this.prisma.subject.findUnique({
+            where: { id: createQuizDto.subjectId },
+        });
         if (!subject) throw new BadRequestException('Subject not found');
-        let group = await this.prisma.group.findUnique({ where: { id: createQuizDto.groupId } });
+
+        const group = await this.prisma.group.findUnique({
+            where: { id: createQuizDto.groupId },
+        });
         if (!group) throw new BadRequestException('Group not found');
-        const nowEgypt = this.getCurrentUTCTime();
-        const isActive = startsAtEgypt <= nowEgypt;
+
+        // ❌ ما نحسبش isActive هنا
         const quiz = await this.prisma.quiz.create({
             data: {
-                ...createQuizDto, createdById: userId, isActive, status: 'DRAFT' as any, startsAt: startsAtEgypt,
-                endsAt: endsAtEgypt,
-            }
+                ...createQuizDto,
+                createdById: userId,
+                isActive: true,   // default, التفعيل الحقيقي يتحكم فيه getAvailableQuizzes
+                status: 'DRAFT' as any,
+                startsAt: startsAtUTC,
+                endsAt: endsAtUTC,
+            },
+            include: {
+                subject: true,
+                group: true,
+                createdBy: {
+                    select: { id: true, name: true, email: true },
+                },
+            },
         });
-        // Do NOT notify students on draft creation
-        return quiz.id;
+
+        return quiz;
     }
+
 
     async updateQuiz(id: number, userId: number, updateQuizDto: UpdateQuizDto) {
         // validate quiz ownership
@@ -659,7 +687,7 @@ export class QuizService {
                         "AI correction service is temporarily unavailable. Please try again later."
                     );
                 } else if (error.response?.status >= 400 && error.response?.status < 500) {
-                throw new BadRequestException(
+                    throw new BadRequestException(
                         "AI correction failed: " + (error.response?.data?.message || error.response?.data?.error || error.message)
                     );
                 } else {
@@ -994,25 +1022,25 @@ export class QuizService {
 
         // Check if student already has an attempt for this quiz
         const existingAttempt = await this.prisma.quizAttempt.findFirst({
-            where: { 
-                quizId: quizId, 
-                studentId: userId 
+            where: {
+                quizId: quizId,
+                studentId: userId
             },
             orderBy: { createdAt: 'desc' } // Get the most recent attempt
         });
 
         if (existingAttempt) {
-           
 
-            
-                throw new BadRequestException('You have already completed this quiz. Only one attempt per quiz is allowed.');
-            
+
+
+            throw new BadRequestException('You have already completed this quiz. Only one attempt per quiz is allowed.');
+
         }
 
         const now = new Date();
         // Convert to Egypt timezone (UTC+2)
         const nowUTC = new Date(now.getTime() + (2 * 60 * 60 * 1000));
-        
+
         console.log('startQuizAttempt - Date validation:', {
             quizId: quizId,
             userId: userId,
@@ -1026,22 +1054,22 @@ export class QuizService {
         if (quiz.startsAt > nowUTC || quiz.endsAt <= nowUTC) {
             throw new BadRequestException('Quiz is not available');
         }
-        
-        const attempt = await this.prisma.quizAttempt.create({ 
-            data: { 
-                quizId, 
-                studentId: userId, 
-                startedAt: nowUTC 
-            } 
+
+        const attempt = await this.prisma.quizAttempt.create({
+            data: {
+                quizId,
+                studentId: userId,
+                startedAt: nowUTC
+            }
         });
-        
+
         console.log('New quiz attempt created:', {
             attemptId: attempt.id,
             quizId: quizId,
             userId: userId,
             startedAt: attempt.startedAt.toISOString()
         });
-        
+
         await this.notifications.create(quiz.createdById, `Student ${userId} started quiz: ${quiz.title}`, NotificationType.QUIZ_ASSIGNED);
         this.notificationGateway.sendNotification(quiz.createdById.toString(), `Student ${userId} started quiz: ${quiz.title}`);
         return attempt;
@@ -1050,18 +1078,19 @@ export class QuizService {
     async getQuestionsForAttempt(userId: number, quizAttemptId: number) {
         const attempt = await this.prisma.quizAttempt.findUnique({ where: { id: quizAttemptId, studentId: userId } });
         if (!attempt) throw new BadRequestException('Attempt not found');
-        return await this.prisma.question.findMany({ where: { quizId: attempt.quizId  },
-        select: {
-            id: true,
-            question: true,
-            type: true,
-            options : true,
-            createdById : true,
-            mode: true,
-            score : true,
-            answer: true,
-            
-        }
+        return await this.prisma.question.findMany({
+            where: { quizId: attempt.quizId },
+            select: {
+                id: true,
+                question: true,
+                type: true,
+                options: true,
+                createdById: true,
+                mode: true,
+                score: true,
+                answer: true,
+
+            }
         });
     }
 
@@ -1119,37 +1148,49 @@ export class QuizService {
 
 
 
-    getAvailableQuizzes(userId: number) {
-        const now = new Date();
-        // Convert to Egypt timezone (UTC+2)
-        const nowUTC = new Date(now.getTime() + (2 * 60 * 60 * 1000));
-        
+    async getAvailableQuizzes(userId: number) {
+        // استخدام الخدمة الموحدة للحصول على الوقت الحالي
+        const nowUTC = this.timezoneService.getCurrentUTCTime();
+        const nowEgypt = this.timezoneService.getCurrentEgyptTime();
+
         console.log('getAvailableQuizzes - Date comparison:', {
-            localTime: now.toISOString(),
-            utcTime: nowUTC.toISOString(),
-            userId: userId
+            currentUTC: nowUTC.toISOString(),
+            currentEgypt: nowEgypt.toISOString(),
+            userId: userId,
         });
 
-        return this.prisma.quiz.findMany({
+        // البحث عن الكويزات المتاحة (مقارنة بـ UTC لأن البيانات محفوظة بـ UTC)
+        const quizzes = await this.prisma.quiz.findMany({
             where: {
                 isActive: true,
-                startsAt: { lte: nowUTC },
-                endsAt: { gt: nowUTC },
+                startsAt: { lte: nowUTC }, // يبدأ قبل أو يساوي الوقت الحالي
+                endsAt: { gt: nowUTC },    // ينتهي بعد الوقت الحالي
+                status: 'PUBLIC' as any,   // فقط الكويزات المنشورة
                 group: {
                     memberships: {
                         some: {
                             studentId: userId,
-                            status: 'APPROVED'
-                        }
-                    }
-                }
+                            status: 'APPROVED',
+                        },
+                    },
+                },
             },
             include: {
                 group: true,
-                subject: true
-            }
+                subject: true,
+            },
         });
+
+        // تحويل التواريخ إلى توقيت مصر للعرض
+        return quizzes.map(quiz => ({
+            ...quiz,
+            startsAt: this.timezoneService.convertUTCToEgyptTime(quiz.startsAt),
+            endsAt: this.timezoneService.convertUTCToEgyptTime(quiz.endsAt),
+        }));
     }
+
+
+
 
 
 
@@ -1513,7 +1554,7 @@ export class QuizService {
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    
+
                 }
             );
         } catch (error: any) {

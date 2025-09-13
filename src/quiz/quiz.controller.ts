@@ -12,7 +12,8 @@ import {
     HttpCode,
     HttpStatus,
     Query,
-    Req
+    Req,
+    Logger
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiBody } from '@nestjs/swagger';
 import { QuizService } from './quiz.service';
@@ -693,9 +694,30 @@ export class QuizController {
         return await this.quizService.getQuizAttempt(quizAttemptId, req.user.id);
     }
 
-    @Get('available')
-    // @Roles(Role.STUDENT) // Temporarily commented out for debugging
-    @UseGuards(AuthenticationGuard) // Temporarily removed AuthorizationGuard
+    // @Get('available')
+    // // @Roles(Role.STUDENT) // Temporarily commented out for debugging
+    // @UseGuards(AuthenticationGuard) // Temporarily removed AuthorizationGuard
+    // @ApiOperation({ summary: 'Get available quizzes for student' })
+    // @ApiResponse({
+    //     status: 200,
+    //     description: 'Available quizzes retrieved successfully',
+    //     type: [AvailableQuizResponseDto]
+    // })
+    // @ApiResponse({ status: 401, description: 'Unauthorized' })
+    // @ApiResponse({ status: 403, description: 'Forbidden - Student role required' })
+    // /**
+    //  * Retrieves all quizzes that the authenticated student is eligible to attempt
+    //  *
+    //  * @returns The available quizzes
+    //  */
+    // getAvailableQuizzes(@Req() req: any) {
+        
+    //     return this.quizService.getAvailableQuizzes(+req.user.id);
+    // }
+
+    @Get('available/quizzs')
+    @Roles(Role.STUDENT)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get available quizzes for student' })
     @ApiResponse({
         status: 200,
@@ -709,20 +731,10 @@ export class QuizController {
      *
      * @returns The available quizzes
      */
-    getAvailableQuizzes(@Req() req: any) {
-        console.log('=== DEBUG INFO ===');
-        console.log('req.user:', req.user);
-        console.log('req.user.id:', req.user.id);
-        console.log('req.user.role:', req.user.role);
-        console.log('typeof req.user.id:', typeof req.user.id);
-        console.log('converted:', +req.user.id);
-        console.log('Required role: STUDENT');
-        console.log('User role matches:', req.user.role === 'STUDENT');
-        console.log('==================');
-        
-        return this.quizService.getAvailableQuizzes(parseInt(req.user.id, 10));
+     getAvailableQuizzes(@Request() req) {
+        Logger.debug(`the user id is ${req.user.id} and the user role is ${req.user.role} and its type is ${typeof req.user.id}`);
+        return  this.quizService.getAvailableQuizzes(+req.user.id);
     }
-
 
 
     @Post(':id/request-feedback')

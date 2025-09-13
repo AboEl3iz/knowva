@@ -1,17 +1,17 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
+import { TimezoneService } from 'src/common/timezone.service';
 
 @Injectable()
 export class AnalysisService {
-  constructor(private prisma: PrismaService) { }
+  constructor(
+    private prisma: PrismaService,
+    private timezoneService: TimezoneService
+  ) { }
 
+  // استخدام الخدمة الموحدة للtimezone
   private getCurrentUTCTime(): Date {
-    // Get current time and convert to Egypt timezone (UTC+2)
-    const now = new Date();
-    // Convert to Egypt time by adding 2 hours to UTC
-    // Egypt Standard Time is UTC+2
-    const egyptTime = new Date(now.getTime() + (2 * 60 * 60 * 1000));
-    return egyptTime;
+    return this.timezoneService.getCurrentUTCTime();
   }
 
   private formatDateForComparison(date: Date): string {
@@ -230,7 +230,8 @@ export class AnalysisService {
         attempts: {
           include: {
             studentAnswers: { include: { question: true } }
-          }
+          },
+          
         },
         group: {
           include: {
@@ -311,7 +312,7 @@ export class AnalysisService {
       else if (s.percent < 85) distribution[2]++;
       else distribution[3]++;
     }
-
+const nowUTC = new Date();
     // نسب النجاح
     const successParticipants = participants > 0
       ? Math.round(((quiz.attempts.filter(a => (a.score ?? 0) >= passScore).length ?? 0) / participants) * 100)
@@ -321,6 +322,19 @@ export class AnalysisService {
       ? Math.round(((quiz.attempts.filter(a => (a.score ?? 0) >= passScore).length ?? 0) / totalStudents) * 100)
       : 0;
 
+     const lastEndedExam = await this.prisma.quiz.findFirst({
+       where: {
+         groupId: quiz.groupId,
+         status: 'PUBLIC',
+         endsAt: {
+           lte: nowUTC  // انتهى وقته (أقل من أو يساوي الوقت الحالي)
+         }
+       },
+       orderBy: {
+         endsAt: 'desc'  // آخر امتحان انتهى
+       }
+     })
+
     return {
       participants,
       attendancePercent: attendance,
@@ -328,7 +342,8 @@ export class AnalysisService {
       hardestQuestions,
       distribution: { ranges: ['0-50', '50-70', '70-85', '85-100'], counts: distribution },
       successParticipantsPercent: successParticipants,
-      successClassWidePercent: successClassWide
+      successClassWidePercent: successClassWide,
+      lastEndedExam
     };
   }
   // ===================== home Analysis =====================
@@ -443,13 +458,15 @@ export class AnalysisService {
 
   }
 
-  async getAllResults(studentId : number) {
+  async getAllResults(studentId: number) {
     let results = await this.prisma.quizAttempt.findMany({
       where: {
         studentId: studentId
       },
       include: {
-        quiz: true
+        quiz: true,
+        studentAnswers: true,
+
       }
     });
 
@@ -459,7 +476,7 @@ export class AnalysisService {
         startsAt: {
           gt: new Date()
         },
-        group : {
+        group: {
           memberships: {
             some: {
               studentId: studentId
@@ -468,14 +485,14 @@ export class AnalysisService {
         }
       }
     });
-     
+
     let n_exams_ended = await this.prisma.quiz.count({
       where: {
         status: 'PUBLIC',
         endsAt: {
           lte: new Date()
         },
-        group : {
+        group: {
           memberships: {
             some: {
               studentId: studentId
@@ -494,7 +511,7 @@ export class AnalysisService {
         endsAt: {
           gte: new Date()
         },
-        group : {
+        group: {
           memberships: {
             some: {
               studentId: studentId
@@ -503,98 +520,230 @@ export class AnalysisService {
         }
       }
     })
-    return {results, n_exams_oncoming, n_exams_ended , n_exams_onging};
+    return { results, n_exams_oncoming, n_exams_ended, n_exams_onging };
   }
-   async getNextDueQuiz(userId: number) {
-        // Use more accurate date handling with proper UTC conversion
-        const now = new Date();
-        const nowUTC = this.getCurrentUTCTime();
-        
-        console.log('getNextDueQuiz - Date comparison:', {
-            localTime: this.formatDateForComparison(now),
-            utcTime: this.formatDateForComparison(nowUTC),
-            userId: userId,
-            timezoneOffset: now.getTimezoneOffset()
-        });
+  async getNextDueQuiz(userId: number) {
+    const nowUTC = this.timezoneService.getCurrentUTCTime();
+    const nowEgypt = this.timezoneService.getCurrentEgyptTime();
 
-        // Prefer currently ongoing quizzes
-        const ongoing = await this.prisma.quiz.findFirst({
-            where: {
-                isActive: true,
-                startsAt: { lte: nowUTC },
-                endsAt: { gt: nowUTC },
-                status: 'PUBLIC' as any,
-                group: {
-                    memberships: {
-                        some: { studentId: userId, status: 'APPROVED' }
-                    }
-                }
-            },
-            orderBy: { startsAt: 'asc' },
-            include: { 
-                group: {
-                    select: { id: true, name: true, status: true }
-                }, 
-                subject: true 
-            }
-        });
+    console.log('Current UTC:', nowUTC.toISOString());
+    console.log('Current Egypt:', nowEgypt.toISOString());
 
-        console.log('Ongoing quiz found:', ongoing ? {
-            id: ongoing.id,
-            title: ongoing.title,
-            startsAt: this.formatDateForComparison(ongoing.startsAt),
-            endsAt: this.formatDateForComparison(ongoing.endsAt),
-            currentTime: this.formatDateForComparison(nowUTC),
-            isActive: ongoing.isActive,
-            status: ongoing.status
-        } : 'No ongoing quiz');
-
-        if (ongoing) {
-            return {
-                ...ongoing,
-                currentStatus: 'ONGOING',
-                timeRemaining: Math.max(0, Math.floor((ongoing.endsAt.getTime() - nowUTC.getTime()) / (1000 * 60))), // minutes remaining
-                timeUntilStart: Math.max(0, Math.floor((ongoing.startsAt.getTime() - nowUTC.getTime()) / (1000 * 60))) // minutes until start
-            };
+    // Ongoing quiz (status runtime, not from DB)
+    const ongoing = await this.prisma.quiz.findFirst({
+      where: {
+        startsAt: { lte: nowUTC },
+        endsAt: { gt: nowUTC },
+        status: 'PUBLIC' as any,
+        group: {
+          memberships: {
+            some: { studentId: userId, status: 'APPROVED' }
+          }
         }
+      },
+      orderBy: { startsAt: 'asc' },
+      include: {
+        group: { select: { id: true, name: true, status: true } },
+        subject: true
+      }
+    });
 
-        // Otherwise, return the next upcoming published quiz
-        const upcoming = await this.prisma.quiz.findFirst({
-            where: {
-                startsAt: { gt: nowUTC },
-                status: 'PUBLIC' as any,
-                group: {
-                    memberships: {
-                        some: { studentId: userId, status: 'APPROVED' }
-                    }
-                }
-            },
-            orderBy: { startsAt: 'asc' },
-            include: { group: true, subject: true }
-        });
+    if (ongoing) {
+      console.log('Ongoing quiz found:', {
+        id: ongoing.id,
+        title: ongoing.title,
+        startsAtUTC: ongoing.startsAt.toISOString(),
+        endsAtUTC: ongoing.endsAt.toISOString(),
+        nowUTC: nowUTC.toISOString()
+      });
 
-        console.log('Upcoming quiz found:', upcoming ? {
-            id: upcoming.id,
-            title: upcoming.title,
-            startsAt: this.formatDateForComparison(upcoming.startsAt),
-            endsAt: this.formatDateForComparison(upcoming.endsAt),
-            currentTime: this.formatDateForComparison(nowUTC),
-            isActive: upcoming.isActive,
-            status: upcoming.status
-        } : 'No upcoming quiz');
-
-        if (!upcoming) {
-            return { 
-                message: "No quizzes upcoming for you",
-                currentTime: this.formatDateForComparison(nowUTC)
-            };
-        }
-
-        return {
-            ...upcoming,
-            currentStatus: 'UPCOMING',
-            timeUntilStart: Math.max(0, Math.floor((upcoming.startsAt.getTime() - nowUTC.getTime()) / (1000 * 60))), // minutes until start
-            durationMins: upcoming.durationMins || 60 // fallback duration
-        };
+      return {
+        ...ongoing,
+        startsAt: this.timezoneService.convertUTCToEgyptTime(ongoing.startsAt),
+        endsAt: this.timezoneService.convertUTCToEgyptTime(ongoing.endsAt),
+        currentStatus: 'ONGOING',
+        timeRemaining: Math.max(
+          0,
+          Math.floor((ongoing.endsAt.getTime() - nowUTC.getTime()) / (1000 * 60))
+        ),
+        timeUntilStart: 0
+      };
     }
-}
+
+    // Upcoming quiz
+    const upcoming = await this.prisma.quiz.findFirst({
+      where: {
+        startsAt: { gt: nowUTC },
+        status: 'PUBLIC' as any,
+        group: {
+          memberships: {
+            some: { studentId: userId, status: 'APPROVED' }
+          }
+        }
+      },
+      orderBy: { startsAt: 'asc' },
+      include: {
+        group: { select: { id: true, name: true, status: true } },
+        subject: true
+      }
+    });
+
+    if (upcoming) {
+      console.log('Upcoming quiz found:', {
+        id: upcoming.id,
+        title: upcoming.title,
+        startsAtUTC: upcoming.startsAt.toISOString(),
+        nowUTC: nowUTC.toISOString()
+      });
+
+      return {
+        ...upcoming,
+        startsAt: this.timezoneService.convertUTCToEgyptTime(upcoming.startsAt),
+        endsAt: this.timezoneService.convertUTCToEgyptTime(upcoming.endsAt),
+        currentStatus: 'UPCOMING',
+        timeUntilStart: Math.max(
+          0,
+          Math.floor((upcoming.startsAt.getTime() - nowUTC.getTime()) / (1000 * 60))
+        ),
+        durationMins: upcoming.durationMins || 60
+      };
+    }
+
+    return {
+      message: "No quizzes upcoming for you",
+      currentTime: this.timezoneService.formatDateForDisplay(nowEgypt, 'Egypt')
+    };
+  }
+
+
+   /**
+    * الحصول على آخر امتحان انتهى وقته للطالب
+    */
+   async getLastEndedExam(userId: number) {
+     const nowUTC = this.timezoneService.getCurrentUTCTime();
+     
+     // البحث عن آخر امتحان انتهى وقته من المجموعات التي ينتمي إليها الطالب
+     const lastEndedExam = await this.prisma.quiz.findFirst({
+       where: {
+         status: 'PUBLIC',
+         endsAt: {
+           lte: nowUTC  // انتهى وقته
+         },
+         group: {
+           memberships: {
+             some: {
+               studentId: userId,
+               status: 'APPROVED'
+             }
+           }
+         }
+       },
+       orderBy: {
+         endsAt: 'desc'  // آخر امتحان انتهى
+       },
+       include: {
+         group: {
+           select: { id: true, name: true, status: true }
+         },
+         subject: true,
+         attempts: {
+           where: {
+             studentId: userId
+           },
+           select: {
+             id: true,
+             score: true,
+             startedAt: true,
+             endedAt: true
+           }
+         }
+       }
+     });
+
+     if (!lastEndedExam) {
+       return {
+         message: "لا يوجد امتحانات منتهية",
+         currentTime: this.timezoneService.formatDateForDisplay(nowUTC, 'Egypt')
+       };
+     }
+
+     // تحويل التواريخ إلى توقيت مصر للعرض
+     return {
+       ...lastEndedExam,
+       startsAt: this.timezoneService.convertUTCToEgyptTime(lastEndedExam.startsAt),
+       endsAt: this.timezoneService.convertUTCToEgyptTime(lastEndedExam.endsAt),
+       currentTime: this.timezoneService.formatDateForDisplay(nowUTC, 'Egypt'),
+       studentAttempt: lastEndedExam.attempts[0] || null
+     };
+   }
+
+   /**
+    * الحصول على جميع الامتحانات المنتهية للطالب
+    */
+   async getAllEndedExams(userId: number) {
+     const nowUTC = this.timezoneService.getCurrentUTCTime();
+     
+     // البحث عن جميع الامتحانات المنتهية من المجموعات التي ينتمي إليها الطالب
+     const endedExams = await this.prisma.quiz.findMany({
+       where: {
+         status: 'PUBLIC',
+         endsAt: {
+           lte: nowUTC  // انتهى وقته
+         },
+         group: {
+           memberships: {
+             some: {
+               studentId: userId,
+               status: 'APPROVED'
+             }
+           }
+         }
+       },
+       orderBy: {
+         endsAt: 'desc'  // مرتبة من الأحدث للأقدم
+       },
+       include: {
+         group: {
+           select: { id: true, name: true, status: true }
+         },
+         subject: true,
+         attempts: {
+           where: {
+             studentId: userId
+           },
+           select: {
+             id: true,
+             score: true,
+             startedAt: true,
+             endedAt: true
+           }
+         }
+       }
+     });
+
+     if (endedExams.length === 0) {
+       return {
+         message: "لا يوجد امتحانات منتهية",
+         exams: [],
+         count: 0,
+         currentTime: this.timezoneService.formatDateForDisplay(nowUTC, 'Egypt')
+       };
+     }
+
+     // تحويل التواريخ إلى توقيت مصر للعرض
+     const formattedExams = endedExams.map(exam => ({
+       ...exam,
+       startsAt: this.timezoneService.convertUTCToEgyptTime(exam.startsAt),
+       endsAt: this.timezoneService.convertUTCToEgyptTime(exam.endsAt),
+       studentAttempt: exam.attempts[0] || null
+     }));
+
+     return {
+       exams: formattedExams,
+       count: endedExams.length,
+       currentTime: this.timezoneService.formatDateForDisplay(nowUTC, 'Egypt')
+     };
+   }
+
+   // تم حذف الطرق القديمة واستبدالها بخدمة timezone موحدة
+ }
