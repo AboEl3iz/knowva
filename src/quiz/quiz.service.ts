@@ -959,6 +959,34 @@ export class QuizService {
             throw new BadRequestException('Quiz is not published');
         }
 
+        // Check if student already has an attempt for this quiz
+        const existingAttempt = await this.prisma.quizAttempt.findFirst({
+            where: { 
+                quizId: quizId, 
+                studentId: userId 
+            },
+            orderBy: { createdAt: 'desc' } // Get the most recent attempt
+        });
+
+        if (existingAttempt) {
+            console.log('Existing attempt found:', {
+                quizId: quizId,
+                userId: userId,
+                existingAttemptId: existingAttempt.id,
+                existingAttemptStartedAt: existingAttempt.startedAt.toISOString(),
+                existingAttemptEndedAt: existingAttempt.endedAt?.toISOString() || 'Not ended',
+                isCompleted: !!existingAttempt.endedAt
+            });
+
+            if (existingAttempt.endedAt) {
+                throw new BadRequestException('You have already completed this quiz. Only one attempt per quiz is allowed.');
+            } else {
+                // If attempt exists but not completed, return the existing attempt
+                console.log('Returning existing incomplete attempt:', existingAttempt.id);
+                return existingAttempt;
+            }
+        }
+
         const now = new Date();
         const nowUTC = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
         
@@ -982,6 +1010,13 @@ export class QuizService {
                 studentId: userId, 
                 startedAt: nowUTC 
             } 
+        });
+        
+        console.log('New quiz attempt created:', {
+            attemptId: attempt.id,
+            quizId: quizId,
+            userId: userId,
+            startedAt: attempt.startedAt.toISOString()
         });
         
         await this.notifications.create(quiz.createdById, `Student ${userId} started quiz: ${quiz.title}`, NotificationType.QUIZ_ASSIGNED);
