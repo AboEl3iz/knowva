@@ -745,5 +745,96 @@ const nowUTC = new Date();
      };
    }
 
+   /**
+    * الحصول على حالة الكويز الحالية (UPCOMING, ONGOING, ENDED)
+    */
+   getQuizCurrentStatus(quiz: any): 'UPCOMING' | 'ONGOING' | 'ENDED' {
+     const nowUTC = this.timezoneService.getCurrentUTCTime();
+     
+     if (quiz.startsAt > nowUTC) {
+       return 'UPCOMING';
+     } else if (quiz.endsAt > nowUTC) {
+       return 'ONGOING';
+     } else {
+       return 'ENDED';
+     }
+   }
+
+   /**
+    * إضافة currentStatus لأي كويز
+    */
+   addCurrentStatusToQuiz(quiz: any) {
+     const nowUTC = this.timezoneService.getCurrentUTCTime();
+     const nowEgypt = this.timezoneService.getCurrentEgyptTime();
+     
+     const currentStatus = this.getQuizCurrentStatus(quiz);
+     
+     // حساب الوقت المتبقي أو الوقت حتى البداية
+     let timeRemaining = 0;
+     let timeUntilStart = 0;
+     
+     if (currentStatus === 'ONGOING') {
+       timeRemaining = Math.max(0, Math.floor((quiz.endsAt.getTime() - nowUTC.getTime()) / (1000 * 60)));
+     } else if (currentStatus === 'UPCOMING') {
+       timeUntilStart = Math.max(0, Math.floor((quiz.startsAt.getTime() - nowUTC.getTime()) / (1000 * 60)));
+     }
+
+     return {
+       ...quiz,
+       startsAt: this.timezoneService.convertUTCToEgyptTime(quiz.startsAt),
+       endsAt: this.timezoneService.convertUTCToEgyptTime(quiz.endsAt),
+       currentStatus,
+       timeRemaining,
+       timeUntilStart,
+       currentTime: this.timezoneService.formatDateForDisplay(nowEgypt, 'Egypt')
+     };
+   }
+
+   /**
+    * الحصول على كويز مع currentStatus
+    */
+   async getQuizWithStatus(quizId: number, userId: number) {
+     const quiz = await this.prisma.quiz.findFirst({
+       where: {
+         id: quizId,
+         status: 'PUBLIC',
+         group: {
+           memberships: {
+             some: {
+               studentId: userId,
+               status: 'APPROVED'
+             }
+           }
+         }
+       },
+       include: {
+         group: {
+           select: { id: true, name: true, status: true }
+         },
+         subject: true,
+         attempts: {
+           where: {
+             studentId: userId
+           },
+           select: {
+             id: true,
+             score: true,
+             startedAt: true,
+             endedAt: true
+           }
+         }
+       }
+     });
+
+     if (!quiz) {
+       return {
+         message: "الكويز غير موجود أو غير متاح لك",
+         currentTime: this.timezoneService.formatDateForDisplay(this.timezoneService.getCurrentUTCTime(), 'Egypt')
+       };
+     }
+
+     return this.addCurrentStatusToQuiz(quiz);
+   }
+
    // تم حذف الطرق القديمة واستبدالها بخدمة timezone موحدة
  }

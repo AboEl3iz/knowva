@@ -169,4 +169,16 @@ export class AnalysisController {
     async getAllEndedExams(@Req() req : any) {
         return this.analysisService.getAllEndedExams(+req.user.id);
     }
+
+  @Get('quiz/:id/status')
+    @Roles(Role.STUDENT)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
+    @ApiOperation({ summary: 'Get quiz with current status' })
+    @ApiResponse({ status: 200, description: 'Quiz with current status' })
+    /**
+     * Returns a specific quiz with its current status (UPCOMING, ONGOING, ENDED)
+     */
+    async getQuizWithStatus(@Param('id') quizId: string, @Req() req : any) {
+        return this.analysisService.getQuizWithStatus(+quizId, +req.user.id);
+    }
 }
