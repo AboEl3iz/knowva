@@ -469,11 +469,10 @@ export class QuizController {
     }
 
     // Quiz Attempt Endpoints
-    @Get(':id/attempts/my')
+    @Get('attempts/my')
     @Roles(Role.STUDENT)
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get my quiz attempts' })
-    @ApiParam({ name: 'id', description: 'Quiz ID' })
     @ApiResponse({
         status: 200,
         description: 'Quiz attempts retrieved successfully',
@@ -481,15 +480,36 @@ export class QuizController {
     })
     @ApiResponse({ status: 401, description: 'Unauthorized' })
     @ApiResponse({ status: 403, description: 'Forbidden - Student role required' })
-    @ApiResponse({ status: 400, description: 'Bad request - Invalid quiz ID' })
+    /**
+     * Retrieves all quiz attempts for the authenticated student for a quiz
+     *
+     * @returns The quiz attempts
+     */
+    async getMyQuizAttempts(@Request() req) {
+        return await this.quizService.getMyQuizAttempts(req.user.id);
+    }
+
+    @Get('attempts/my/:attemptId')
+    @Roles(Role.STUDENT)
+    @UseGuards(AuthenticationGuard, AuthorizationGuard)
+    @ApiOperation({ summary: 'Get my quiz attempt detailed' })
+    @ApiParam({ name: 'id', description: 'Quiz ID' })
+    @ApiResponse({
+        status: 200,
+        description: 'Quiz attempts retrieved successfully',
+        type: QuizAttemptWithDetailsResponseDto
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Student role required' })
+    @ApiResponse({ status: 400, description: 'Bad request - Invalid attempt ID' })
     /**
      * Retrieves all quiz attempts for the authenticated student for a quiz
      *
      * @param id The ID of the quiz to retrieve attempts for
      * @returns The quiz attempts
      */
-    async getMyQuizAttempts(@Param('id', ParseIntPipe) id: number, @Request() req) {
-        return await this.quizService.getMyQuizAttempts(req.user.id, id);
+    async getMyQuizAttempt(@Request() req, @Param('attemptId', ParseIntPipe) attemptId: number) {
+        return await this.quizService.getMyQuizAttempt(req.user.id, attemptId);
     }
 
     @Get(':id/attempts')
