@@ -533,7 +533,7 @@ export class AnalysisService {
             include: { group: true, subject: true }
         });
         // Logger.debug(upcoming);
-        if(!upcoming) return { "message": "No quiz found" };
+        if(!upcoming) throw new NotFoundException('No quiz found');
         return {
             ...upcoming,
             currentStatus: 'UPCOMING',
