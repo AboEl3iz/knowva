@@ -19,7 +19,7 @@ import { ConfigService } from '@nestjs/config';
 @Injectable()
 export class QuizService {
     constructor(
-        private prisma: PrismaService, 
+        private prisma: PrismaService,
         private notifications: NotificationService,
         private readonly notificationGateway: NotificationGateway,
         private readonly config: ConfigService,
@@ -995,12 +995,13 @@ export class QuizService {
     }
 
     async getMyQuizAttempts(userId: number) {
-        return await this.prisma.quizAttempt.findMany({ where: { studentId: userId }
-        , include: {
-            studentAnswers: { include: { question: true , quizAttempt: true } },
-            quiz: { include: { questions: { include: { question: true } } } }
-        }
-        
+        return await this.prisma.quizAttempt.findMany({
+            where: { studentId: userId }
+            , include: {
+                studentAnswers: { include: { question: true, quizAttempt: true } },
+                quiz: { include: { questions: { include: { question: true } } } }
+            }
+
         });
     }
 
@@ -1008,17 +1009,23 @@ export class QuizService {
         return await this.prisma.quizAttempt.findFirst({
             where: { studentId: userId, id: attemptId }, include: {
                 studentAnswers: { include: { question: true } },
-                quiz: { include: { questions: {
-                    include: { question : {
-                        select: {
-                            type: true,
-                            question: true,
-                            options : true,
-                            mode: true,
-                            score : true
+                quiz: {
+                    include: {
+                        questions: {
+                            include: {
+                                question: {
+                                    select: {
+                                        type: true,
+                                        question: true,
+                                        options: true,
+                                        mode: true,
+                                        score: true
+                                    }
+                                }
+                            }
                         }
-                    } }
-                } } }
+                    }
+                }
             }
         });
     }
@@ -1036,52 +1043,52 @@ export class QuizService {
             throw new BadRequestException('Quiz is not published');
         }
 
-        // Check if student already has an attempt for this quiz
-        const existingAttempt = await this.prisma.quizAttempt.findFirst({
-            where: {
-                quizId: quizId,
-                studentId: userId
-            },
-            orderBy: { createdAt: 'desc' } // Get the most recent attempt
-        });
-
-       
-
         const now = new Date();
-        // Convert to Egypt timezone (UTC+2)
         const nowUTC = new Date(now.getTime() + (2 * 60 * 60 * 1000));
 
         console.log('startQuizAttempt - Date validation:', {
-            quizId: quizId,
-            userId: userId,
+            quizId,
+            userId,
             quizStartsAt: quiz.startsAt.toISOString(),
             quizEndsAt: quiz.endsAt.toISOString(),
             currentTime: nowUTC.toISOString(),
             isQuizStarted: quiz.startsAt <= nowUTC,
-            isQuizEnded: quiz.endsAt <= nowUTC
+            isQuizEnded: quiz.endsAt <= nowUTC,
         });
 
-        // if (quiz.startsAt > now || quiz.endsAt <= now) {
-        //     throw new BadRequestException('Quiz is not available');
-        // }
-
-        const attempt = await this.prisma.quizAttempt.create({
-            data: {
+        // 👇 create or update (upsert)
+        const attempt = await this.prisma.quizAttempt.upsert({
+            where: {
+                quizId_studentId: { quizId, studentId: userId }, // لازم تكون عامل @@unique في schema
+            },
+            update: {
+                startedAt: nowUTC,
+            },
+            create: {
                 quizId,
                 studentId: userId,
-                startedAt: nowUTC
-            }
+                startedAt: nowUTC,
+            },
         });
 
-        console.log('New quiz attempt created:', {
+        console.log('Quiz attempt created/updated:', {
             attemptId: attempt.id,
-            quizId: quizId,
-            userId: userId,
-            startedAt: attempt.startedAt.toISOString()
+            quizId,
+            userId,
+            startedAt: attempt.startedAt.toISOString(),
         });
 
-        await this.notifications.create(quiz.createdById, `Student ${userId} started quiz: ${quiz.title}`, NotificationType.QUIZ_ASSIGNED);
-        this.notificationGateway.sendNotification(quiz.createdById.toString(), `Student ${userId} started quiz: ${quiz.title}`);
+        await this.notifications.create(
+            quiz.createdById,
+            `Student ${userId} started quiz: ${quiz.title}`,
+            NotificationType.QUIZ_ASSIGNED,
+        );
+
+        this.notificationGateway.sendNotification(
+            quiz.createdById.toString(),
+            `Student ${userId} started quiz: ${quiz.title}`,
+        );
+
         return attempt;
     }
 
