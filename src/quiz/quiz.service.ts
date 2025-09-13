@@ -1061,9 +1061,9 @@ export class QuizService {
             isQuizEnded: quiz.endsAt <= nowUTC
         });
 
-        if (quiz.startsAt > now || quiz.endsAt <= now) {
-            throw new BadRequestException('Quiz is not available');
-        }
+        // if (quiz.startsAt > now || quiz.endsAt <= now) {
+        //     throw new BadRequestException('Quiz is not available');
+        // }
 
         const attempt = await this.prisma.quizAttempt.create({
             data: {
