@@ -138,7 +138,7 @@ export class QuizService {
             },
         });
 
-        return quiz;
+        return quiz.id;
     }
 
 
