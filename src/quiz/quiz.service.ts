@@ -343,7 +343,7 @@ export class QuizService {
             response = await axios.post(
                 'https://8080-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/generate_quiz/',
                 aiRequestPayload,
-                { headers: { 'Content-Type': 'application/json' }, timeout: 60000 },
+                { headers: { 'Content-Type': 'application/json' } },
             );
         } catch (error) {
             Logger.error('AI API Error:', error?.response?.data || error.message);
