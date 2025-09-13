@@ -997,7 +997,7 @@ export class QuizService {
     async getMyQuizAttempts(userId: number) {
         return await this.prisma.quizAttempt.findMany({ where: { studentId: userId }
         , include: {
-            studentAnswers: { include: { question: true } },
+            studentAnswers: { include: { question: true , quizAttempt: true } },
             quiz: { include: { questions: { include: { question: true } } } }
         }
         
@@ -1045,13 +1045,7 @@ export class QuizService {
             orderBy: { createdAt: 'desc' } // Get the most recent attempt
         });
 
-        if (existingAttempt) {
-
-
-
-            throw new BadRequestException('You have already completed this quiz. Only one attempt per quiz is allowed.');
-
-        }
+       
 
         const now = new Date();
         // Convert to Egypt timezone (UTC+2)

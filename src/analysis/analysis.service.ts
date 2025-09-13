@@ -535,6 +535,7 @@ export class AnalysisService {
         startsAt: { lte: nowUTC },
         endsAt: { gt: nowUTC },
         status: 'PUBLIC' as any,
+
         group: {
           memberships: {
             some: { studentId: userId, status: 'APPROVED' }
