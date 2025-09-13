@@ -1061,7 +1061,7 @@ export class QuizService {
             isQuizEnded: quiz.endsAt <= nowUTC
         });
 
-        if (quiz.startsAt > nowUTC || quiz.endsAt <= nowUTC) {
+        if (quiz.startsAt > now || quiz.endsAt <= now) {
             throw new BadRequestException('Quiz is not available');
         }
 
