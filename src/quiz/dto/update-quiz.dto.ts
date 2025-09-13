@@ -1,5 +1,6 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { IsBoolean, IsDateString, IsNumber, IsOptional, IsString } from "class-validator";
+import { IsBoolean, IsNumber, IsOptional, IsString } from "class-validator";
+import { IsDateStringFlexible } from "./validators/is-date-string-flexible.decorator";
 
 export class UpdateQuizDto {
   @ApiPropertyOptional({ example: "Final Exam", description: "Updated quiz title" })
@@ -19,13 +20,13 @@ export class UpdateQuizDto {
 
   @ApiPropertyOptional({ example: "2025-09-20T09:00:00Z", description: "Updated start date/time" })
   @IsOptional()
-  @IsDateString()
-  startsAt?: Date;
+  @IsDateStringFlexible()
+  startsAt?: string;
 
   @ApiPropertyOptional({ example: "2025-09-20T11:00:00Z", description: "Updated end date/time" })
   @IsOptional()
-  @IsDateString()
-  endsAt?: Date;
+  @IsDateStringFlexible()
+  endsAt?: string;
 
   @ApiPropertyOptional({ example: true, description: "Whether the quiz is active" })
   @IsOptional()

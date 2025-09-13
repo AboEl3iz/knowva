@@ -1,5 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsNotEmpty, IsString, IsDateString, IsNumber, Length, IsIn } from "class-validator";
+import { IsNotEmpty, IsString, IsNumber, Length, IsIn } from "class-validator";
+import { IsDateStringFlexible } from "./validators/is-date-string-flexible.decorator";
 
 export class CreateQuizDto {
   @ApiProperty({ example: "Midterm Exam", description: "Title of the quiz" })
@@ -26,12 +27,12 @@ export class CreateQuizDto {
 
   @ApiProperty({ example: "2025-09-15T09:00:00Z", description: "Start date/time of the quiz (ISO8601 format)" })
   @IsNotEmpty()
-  @IsDateString()
+  @IsDateStringFlexible()
   startsAt: string;
 
   @ApiProperty({ example: "2025-09-15T10:30:00Z", description: "End date/time of the quiz (ISO8601 format)" })
   @IsNotEmpty()
-  @IsDateString()
+  @IsDateStringFlexible()
   endsAt: string;
 
   @ApiProperty({ example: 90, description: "Duration of the quiz in minutes" })

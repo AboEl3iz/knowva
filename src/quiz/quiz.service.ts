@@ -80,19 +80,34 @@ export class QuizService {
 
 
     async createQuiz(userId: number, createQuizDto: CreateQuizDto) {
-        if (new Date(createQuizDto.endsAt) <= new Date(createQuizDto.startsAt)) {
+        // Convert input dates to Egypt timezone for proper comparison
+        // If the input date doesn't have timezone info, assume it's Egypt time
+        let startsAtEgypt = new Date(createQuizDto.startsAt);
+        let endsAtEgypt = new Date(createQuizDto.endsAt);
+        
+        // If the date string doesn't end with 'Z', assume it's Egypt time and convert to UTC
+        if (!createQuizDto.startsAt.endsWith('Z')) {
+            // Subtract 2 hours to convert Egypt time to UTC for storage
+            startsAtEgypt = new Date(startsAtEgypt.getTime() - (2 * 60 * 60 * 1000));
+        }
+        if (!createQuizDto.endsAt.endsWith('Z')) {
+            // Subtract 2 hours to convert Egypt time to UTC for storage
+            endsAtEgypt = new Date(endsAtEgypt.getTime() - (2 * 60 * 60 * 1000));
+        }
+        
+        if (endsAtEgypt <= startsAtEgypt) {
             throw new BadRequestException('endsAt must be after startsAt');
         }
         let subject = await this.prisma.subject.findUnique({ where: { id: createQuizDto.subjectId } });
         if (!subject) throw new BadRequestException('Subject not found');
         let group = await this.prisma.group.findUnique({ where: { id: createQuizDto.groupId } });
         if (!group) throw new BadRequestException('Group not found');
-        const nowUTC = this.getCurrentUTCTime();
-        const isActive = new Date(createQuizDto.startsAt) <= nowUTC;
+        const nowEgypt = this.getCurrentUTCTime();
+        const isActive = startsAtEgypt <= nowEgypt;
         const quiz = await this.prisma.quiz.create({
             data: {
-                ...createQuizDto, createdById: userId, isActive, status: 'DRAFT' as any, startsAt: new Date(createQuizDto.startsAt),
-                endsAt: new Date(createQuizDto.endsAt),
+                ...createQuizDto, createdById: userId, isActive, status: 'DRAFT' as any, startsAt: startsAtEgypt,
+                endsAt: endsAtEgypt,
             }
         });
         // Do NOT notify students on draft creation
@@ -106,8 +121,13 @@ export class QuizService {
         // recalc isActive if startsAt updated
         let data: any = { ...updateQuizDto };
         if (updateQuizDto.startsAt) {
-            const nowUTC = this.getCurrentUTCTime();
-            data.isActive = new Date(updateQuizDto.startsAt) <= nowUTC;
+            const nowEgypt = this.getCurrentUTCTime();
+            const startsAtEgypt = new Date(updateQuizDto.startsAt);
+            data.isActive = startsAtEgypt <= nowEgypt;
+            data.startsAt = startsAtEgypt;
+        }
+        if (updateQuizDto.endsAt) {
+            data.endsAt = new Date(updateQuizDto.endsAt);
         }
         const quiz = await this.prisma.quiz.update({ where: { id }, data });
         return quiz;
@@ -982,22 +1002,11 @@ export class QuizService {
         });
 
         if (existingAttempt) {
-            console.log('Existing attempt found:', {
-                quizId: quizId,
-                userId: userId,
-                existingAttemptId: existingAttempt.id,
-                existingAttemptStartedAt: existingAttempt.startedAt.toISOString(),
-                existingAttemptEndedAt: existingAttempt.endedAt?.toISOString() || 'Not ended',
-                isCompleted: !!existingAttempt.endedAt
-            });
+           
 
-            if (existingAttempt.endedAt) {
+            
                 throw new BadRequestException('You have already completed this quiz. Only one attempt per quiz is allowed.');
-            } else {
-                // If attempt exists but not completed, return the existing attempt
-                console.log('Returning existing incomplete attempt:', existingAttempt.id);
-                return existingAttempt;
-            }
+            
         }
 
         const now = new Date();
@@ -1110,7 +1119,7 @@ export class QuizService {
 
 
 
-    getAvailableQuizzes(userId: string) {
+    getAvailableQuizzes(userId: number) {
         const now = new Date();
         // Convert to Egypt timezone (UTC+2)
         const nowUTC = new Date(now.getTime() + (2 * 60 * 60 * 1000));
@@ -1129,7 +1138,7 @@ export class QuizService {
                 group: {
                     memberships: {
                         some: {
-                            studentId: parseInt(userId, 10),
+                            studentId: userId,
                             status: 'APPROVED'
                         }
                     }

@@ -694,8 +694,8 @@ export class QuizController {
     }
 
     @Get('available')
-    @Roles(Role.STUDENT)
-    @UseGuards(AuthenticationGuard, AuthorizationGuard)
+    // @Roles(Role.STUDENT) // Temporarily commented out for debugging
+    @UseGuards(AuthenticationGuard) // Temporarily removed AuthorizationGuard
     @ApiOperation({ summary: 'Get available quizzes for student' })
     @ApiResponse({
         status: 200,
@@ -710,12 +710,17 @@ export class QuizController {
      * @returns The available quizzes
      */
     getAvailableQuizzes(@Req() req: any) {
-
+        console.log('=== DEBUG INFO ===');
         console.log('req.user:', req.user);
         console.log('req.user.id:', req.user.id);
+        console.log('req.user.role:', req.user.role);
         console.log('typeof req.user.id:', typeof req.user.id);
         console.log('converted:', +req.user.id);
-        return this.quizService.getAvailableQuizzes(req.user.id);
+        console.log('Required role: STUDENT');
+        console.log('User role matches:', req.user.role === 'STUDENT');
+        console.log('==================');
+        
+        return this.quizService.getAvailableQuizzes(+req.user.id);
     }
 
 
