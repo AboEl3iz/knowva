@@ -515,7 +515,7 @@ export class AnalysisService {
               select: { id: true, name: true , status: true }
             }, subject: true }
         });
-        Logger.debug(ongoing);
+        // Logger.debug(ongoing);
         if (ongoing) return {...ongoing , currentStatus: 'ONGOING'};
 
         // Otherwise, return the next upcoming published quiz
@@ -532,7 +532,7 @@ export class AnalysisService {
             orderBy: { startsAt: 'asc' },
             include: { group: true, subject: true }
         });
-        Logger.debug(upcoming);
+        // Logger.debug(upcoming);
         return {
             ...upcoming,
             currentStatus: 'UPCOMING',
