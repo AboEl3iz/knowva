@@ -941,6 +941,15 @@ export class QuizService {
     }
 
     async addQuestionsAnswer(quizAttemptId: number, questionAnswerDtos: QuestionAnswerDto[]) {
+        // Validate input data
+        if (!questionAnswerDtos || !Array.isArray(questionAnswerDtos)) {
+            throw new BadRequestException('questionAnswerDtos must be a valid array');
+        }
+
+        if (questionAnswerDtos.length === 0) {
+            throw new BadRequestException('questionAnswerDtos array cannot be empty');
+        }
+
         const attempt = await this.prisma.quizAttempt.findUnique({
             where: { id: quizAttemptId },
             include: { quiz: true },
@@ -950,10 +959,19 @@ export class QuizService {
 
         // check if student already answered
         for (const questionAnswerDto of questionAnswerDtos) {
-            // const errors = await validate(questionAnswerDto);
-            // if (errors.length > 0) {
-            //     throw new InternalServerErrorException('Invalid question answer data');
-            // }
+            // Validate individual question answer DTO
+            if (!questionAnswerDto || typeof questionAnswerDto !== 'object') {
+                throw new BadRequestException('Each question answer must be a valid object');
+            }
+
+            if (!questionAnswerDto.questionId || typeof questionAnswerDto.questionId !== 'number') {
+                throw new BadRequestException('questionId is required and must be a number');
+            }
+
+            if (!questionAnswerDto.answer || typeof questionAnswerDto.answer !== 'string') {
+                throw new BadRequestException('answer is required and must be a string');
+            }
+
             const question = await this.prisma.question.findUnique({ where: { id: questionAnswerDto.questionId } });
             if (!question) throw new BadRequestException('Question not found');
         }
