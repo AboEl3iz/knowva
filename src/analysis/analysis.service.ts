@@ -6,9 +6,12 @@ export class AnalysisService {
   constructor(private prisma: PrismaService) { }
 
   private getCurrentUTCTime(): Date {
-    // Get current time and convert to UTC properly
+    // Get current time and convert to Egypt timezone (UTC+2)
     const now = new Date();
-    return new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+    // Convert to Egypt time by adding 2 hours to UTC
+    // Egypt Standard Time is UTC+2
+    const egyptTime = new Date(now.getTime() + (2 * 60 * 60 * 1000));
+    return egyptTime;
   }
 
   private formatDateForComparison(date: Date): string {

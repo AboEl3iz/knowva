@@ -24,8 +24,12 @@ export class QuizService {
     ) { }
 
     private getCurrentUTCTime(): Date {
+        // Get current time and convert to Egypt timezone (UTC+2)
         const now = new Date();
-        return new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+        // Convert to Egypt time by adding 2 hours to UTC
+        // Egypt Standard Time is UTC+2
+        const egyptTime = new Date(now.getTime() + (2 * 60 * 60 * 1000));
+        return egyptTime;
     }
 
     private getQuizStatus(startsAt: Date, endsAt: Date): "UPCOMING" | "ONGOING" | "ENDED" {
@@ -997,7 +1001,8 @@ export class QuizService {
         }
 
         const now = new Date();
-        const nowUTC = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+        // Convert to Egypt timezone (UTC+2)
+        const nowUTC = new Date(now.getTime() + (2 * 60 * 60 * 1000));
         
         console.log('startQuizAttempt - Date validation:', {
             quizId: quizId,
@@ -1107,7 +1112,8 @@ export class QuizService {
 
     getAvailableQuizzes(userId: string) {
         const now = new Date();
-        const nowUTC = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+        // Convert to Egypt timezone (UTC+2)
+        const nowUTC = new Date(now.getTime() + (2 * 60 * 60 * 1000));
         
         console.log('getAvailableQuizzes - Date comparison:', {
             localTime: now.toISOString(),
