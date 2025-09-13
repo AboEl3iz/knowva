@@ -720,7 +720,7 @@ export class QuizController {
         console.log('User role matches:', req.user.role === 'STUDENT');
         console.log('==================');
         
-        return this.quizService.getAvailableQuizzes(+req.user.id);
+        return this.quizService.getAvailableQuizzes(parseInt(req.user.id, 10));
     }
 
 
