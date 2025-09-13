@@ -923,7 +923,21 @@ export class QuizService {
     async getQuestionsForAttempt(userId: number, quizAttemptId: number) {
         const attempt = await this.prisma.quizAttempt.findUnique({ where: { id: quizAttemptId, studentId: userId } });
         if (!attempt) throw new BadRequestException('Attempt not found');
-        return await this.prisma.question.findMany({ where: { quizId: attempt.quizId } });
+        return await this.prisma.question.findMany({ where: { quizId: attempt.quizId  },
+        select: {
+            id: true,
+            question: true,
+            type: true,
+            options : true,
+            createdById : true,
+            mode: true,
+            score : true,
+            answer: true,
+            
+
+
+        }
+        });
     }
 
     async addQuestionsAnswer(quizAttemptId: number, questionAnswerDtos: QuestionAnswerDto[]) {
