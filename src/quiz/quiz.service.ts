@@ -920,6 +920,12 @@ export class QuizService {
         return attempt;
     }
 
+    async getQuestionsForAttempt(userId: number, quizAttemptId: number) {
+        const attempt = await this.prisma.quizAttempt.findUnique({ where: { id: quizAttemptId, studentId: userId } });
+        if (!attempt) throw new BadRequestException('Attempt not found');
+        return await this.prisma.question.findMany({ where: { quizId: attempt.quizId } });
+    }
+
     async addQuestionsAnswer(quizAttemptId: number, questionAnswerDtos: QuestionAnswerDto[]) {
         const attempt = await this.prisma.quizAttempt.findUnique({
             where: { id: quizAttemptId },

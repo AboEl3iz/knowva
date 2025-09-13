@@ -17,6 +17,7 @@ import { AnalysisModule } from './analysis/analysis.module';
 
 
 import config from './helper/config';
+import { ChatbotModule } from './chatbot/chatbot.module';
 @Module({
   imports: [AuthModule,
     ConfigModule.forRoot(
@@ -37,7 +38,7 @@ import config from './helper/config';
     ChatModule,
     CloudinaryModule,
     AnalysisModule,
-
+    ChatbotModule
   ],
   controllers: [AppController],
   providers: [AppService],
