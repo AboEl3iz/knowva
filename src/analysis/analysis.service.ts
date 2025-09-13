@@ -231,7 +231,7 @@ export class AnalysisService {
           include: {
             studentAnswers: { include: { question: true } }
           },
-          
+
         },
         group: {
           include: {
@@ -312,7 +312,7 @@ export class AnalysisService {
       else if (s.percent < 85) distribution[2]++;
       else distribution[3]++;
     }
-const nowUTC = new Date();
+    const nowUTC = new Date();
     // نسب النجاح
     const successParticipants = participants > 0
       ? Math.round(((quiz.attempts.filter(a => (a.score ?? 0) >= passScore).length ?? 0) / participants) * 100)
@@ -322,18 +322,18 @@ const nowUTC = new Date();
       ? Math.round(((quiz.attempts.filter(a => (a.score ?? 0) >= passScore).length ?? 0) / totalStudents) * 100)
       : 0;
 
-     const lastEndedExam = await this.prisma.quiz.findFirst({
-       where: {
-         groupId: quiz.groupId,
-         status: 'PUBLIC',
-         endsAt: {
-           lte: nowUTC  // انتهى وقته (أقل من أو يساوي الوقت الحالي)
-         }
-       },
-       orderBy: {
-         endsAt: 'desc'  // آخر امتحان انتهى
-       }
-     })
+    const lastEndedExam = await this.prisma.quiz.findFirst({
+      where: {
+        groupId: quiz.groupId,
+        status: 'PUBLIC',
+        endsAt: {
+          lte: nowUTC  // انتهى وقته (أقل من أو يساوي الوقت الحالي)
+        }
+      },
+      orderBy: {
+        endsAt: 'desc'  // آخر امتحان انتهى
+      }
+    })
 
     return {
       participants,
@@ -608,6 +608,14 @@ const nowUTC = new Date();
         durationMins: upcoming.durationMins || 60
       };
     }
+    const quiz = await this.prisma.quiz.findUnique({
+      where: { id: 27 },
+      include: {
+        group: { include: { memberships: true } },
+      },
+    });
+    console.log(JSON.stringify(quiz, null, 2));
+
 
     return {
       message: "No quizzes upcoming for you",
@@ -616,225 +624,225 @@ const nowUTC = new Date();
   }
 
 
-   /**
-    * الحصول على آخر امتحان انتهى وقته للطالب
-    */
-   async getLastEndedExam(userId: number) {
-     const nowUTC = this.timezoneService.getCurrentUTCTime();
-     
-     // البحث عن آخر امتحان انتهى وقته من المجموعات التي ينتمي إليها الطالب
-     const lastEndedExam = await this.prisma.quiz.findFirst({
-       where: {
-         status: 'PUBLIC',
-         endsAt: {
-           lte: nowUTC  // انتهى وقته
-         },
-         group: {
-           memberships: {
-             some: {
-               studentId: userId,
-               status: 'APPROVED'
-             }
-           }
-         }
-       },
-       orderBy: {
-         endsAt: 'desc'  // آخر امتحان انتهى
-       },
-       include: {
-         group: {
-           select: { id: true, name: true, status: true }
-         },
-         subject: true,
-         attempts: {
-           where: {
-             studentId: userId
-           },
-           select: {
-             id: true,
-             score: true,
-             startedAt: true,
-             endedAt: true
-           }
-         }
-       }
-     });
+  /**
+   * الحصول على آخر امتحان انتهى وقته للطالب
+   */
+  async getLastEndedExam(userId: number) {
+    const nowUTC = this.timezoneService.getCurrentUTCTime();
 
-     if (!lastEndedExam) {
-       return {
-         message: "لا يوجد امتحانات منتهية",
-         currentTime: this.timezoneService.formatDateForDisplay(nowUTC, 'Egypt')
-       };
-     }
+    // البحث عن آخر امتحان انتهى وقته من المجموعات التي ينتمي إليها الطالب
+    const lastEndedExam = await this.prisma.quiz.findFirst({
+      where: {
+        status: 'PUBLIC',
+        endsAt: {
+          lte: nowUTC  // انتهى وقته
+        },
+        group: {
+          memberships: {
+            some: {
+              studentId: userId,
+              status: 'APPROVED'
+            }
+          }
+        }
+      },
+      orderBy: {
+        endsAt: 'desc'  // آخر امتحان انتهى
+      },
+      include: {
+        group: {
+          select: { id: true, name: true, status: true }
+        },
+        subject: true,
+        attempts: {
+          where: {
+            studentId: userId
+          },
+          select: {
+            id: true,
+            score: true,
+            startedAt: true,
+            endedAt: true
+          }
+        }
+      }
+    });
 
-     // تحويل التواريخ إلى توقيت مصر للعرض
-     return {
-       ...lastEndedExam,
-       startsAt: this.timezoneService.convertUTCToEgyptTime(lastEndedExam.startsAt),
-       endsAt: this.timezoneService.convertUTCToEgyptTime(lastEndedExam.endsAt),
-       currentTime: this.timezoneService.formatDateForDisplay(nowUTC, 'Egypt'),
-       studentAttempt: lastEndedExam.attempts[0] || null
-     };
-   }
+    if (!lastEndedExam) {
+      return {
+        message: "لا يوجد امتحانات منتهية",
+        currentTime: this.timezoneService.formatDateForDisplay(nowUTC, 'Egypt')
+      };
+    }
 
-   /**
-    * الحصول على جميع الامتحانات المنتهية للطالب
-    */
-   async getAllEndedExams(userId: number) {
-     const nowUTC = this.timezoneService.getCurrentUTCTime();
-     
-     // البحث عن جميع الامتحانات المنتهية من المجموعات التي ينتمي إليها الطالب
-     const endedExams = await this.prisma.quiz.findMany({
-       where: {
-         status: 'PUBLIC',
-         endsAt: {
-           lte: nowUTC  // انتهى وقته
-         },
-         group: {
-           memberships: {
-             some: {
-               studentId: userId,
-               status: 'APPROVED'
-             }
-           }
-         }
-       },
-       orderBy: {
-         endsAt: 'desc'  // مرتبة من الأحدث للأقدم
-       },
-       include: {
-         group: {
-           select: { id: true, name: true, status: true }
-         },
-         subject: true,
-         attempts: {
-           where: {
-             studentId: userId
-           },
-           select: {
-             id: true,
-             score: true,
-             startedAt: true,
-             endedAt: true
-           }
-         }
-       }
-     });
+    // تحويل التواريخ إلى توقيت مصر للعرض
+    return {
+      ...lastEndedExam,
+      startsAt: this.timezoneService.convertUTCToEgyptTime(lastEndedExam.startsAt),
+      endsAt: this.timezoneService.convertUTCToEgyptTime(lastEndedExam.endsAt),
+      currentTime: this.timezoneService.formatDateForDisplay(nowUTC, 'Egypt'),
+      studentAttempt: lastEndedExam.attempts[0] || null
+    };
+  }
 
-     if (endedExams.length === 0) {
-       return {
-         message: "لا يوجد امتحانات منتهية",
-         exams: [],
-         count: 0,
-         currentTime: this.timezoneService.formatDateForDisplay(nowUTC, 'Egypt')
-       };
-     }
+  /**
+   * الحصول على جميع الامتحانات المنتهية للطالب
+   */
+  async getAllEndedExams(userId: number) {
+    const nowUTC = this.timezoneService.getCurrentUTCTime();
 
-     // تحويل التواريخ إلى توقيت مصر للعرض
-     const formattedExams = endedExams.map(exam => ({
-       ...exam,
-       startsAt: this.timezoneService.convertUTCToEgyptTime(exam.startsAt),
-       endsAt: this.timezoneService.convertUTCToEgyptTime(exam.endsAt),
-       studentAttempt: exam.attempts[0] || null
-     }));
+    // البحث عن جميع الامتحانات المنتهية من المجموعات التي ينتمي إليها الطالب
+    const endedExams = await this.prisma.quiz.findMany({
+      where: {
+        status: 'PUBLIC',
+        endsAt: {
+          lte: nowUTC  // انتهى وقته
+        },
+        group: {
+          memberships: {
+            some: {
+              studentId: userId,
+              status: 'APPROVED'
+            }
+          }
+        }
+      },
+      orderBy: {
+        endsAt: 'desc'  // مرتبة من الأحدث للأقدم
+      },
+      include: {
+        group: {
+          select: { id: true, name: true, status: true }
+        },
+        subject: true,
+        attempts: {
+          where: {
+            studentId: userId
+          },
+          select: {
+            id: true,
+            score: true,
+            startedAt: true,
+            endedAt: true
+          }
+        }
+      }
+    });
 
-     return {
-       exams: formattedExams,
-       count: endedExams.length,
-       currentTime: this.timezoneService.formatDateForDisplay(nowUTC, 'Egypt')
-     };
-   }
+    if (endedExams.length === 0) {
+      return {
+        message: "لا يوجد امتحانات منتهية",
+        exams: [],
+        count: 0,
+        currentTime: this.timezoneService.formatDateForDisplay(nowUTC, 'Egypt')
+      };
+    }
 
-   /**
-    * الحصول على حالة الكويز الحالية (UPCOMING, ONGOING, ENDED)
-    */
-   getQuizCurrentStatus(quiz: any): 'UPCOMING' | 'ONGOING' | 'ENDED' {
-     const nowUTC = this.timezoneService.getCurrentUTCTime();
-     
-     if (quiz.startsAt > nowUTC) {
-       return 'UPCOMING';
-     } else if (quiz.endsAt > nowUTC) {
-       return 'ONGOING';
-     } else {
-       return 'ENDED';
-     }
-   }
+    // تحويل التواريخ إلى توقيت مصر للعرض
+    const formattedExams = endedExams.map(exam => ({
+      ...exam,
+      startsAt: this.timezoneService.convertUTCToEgyptTime(exam.startsAt),
+      endsAt: this.timezoneService.convertUTCToEgyptTime(exam.endsAt),
+      studentAttempt: exam.attempts[0] || null
+    }));
 
-   /**
-    * إضافة currentStatus لأي كويز
-    */
-   addCurrentStatusToQuiz(quiz: any) {
-     const nowUTC = this.timezoneService.getCurrentUTCTime();
-     const nowEgypt = this.timezoneService.getCurrentEgyptTime();
-     
-     const currentStatus = this.getQuizCurrentStatus(quiz);
-     
-     // حساب الوقت المتبقي أو الوقت حتى البداية
-     let timeRemaining = 0;
-     let timeUntilStart = 0;
-     
-     if (currentStatus === 'ONGOING') {
-       timeRemaining = Math.max(0, Math.floor((quiz.endsAt.getTime() - nowUTC.getTime()) / (1000 * 60)));
-     } else if (currentStatus === 'UPCOMING') {
-       timeUntilStart = Math.max(0, Math.floor((quiz.startsAt.getTime() - nowUTC.getTime()) / (1000 * 60)));
-     }
+    return {
+      exams: formattedExams,
+      count: endedExams.length,
+      currentTime: this.timezoneService.formatDateForDisplay(nowUTC, 'Egypt')
+    };
+  }
 
-     return {
-       ...quiz,
-       startsAt: this.timezoneService.convertUTCToEgyptTime(quiz.startsAt),
-       endsAt: this.timezoneService.convertUTCToEgyptTime(quiz.endsAt),
-       currentStatus,
-       timeRemaining,
-       timeUntilStart,
-       currentTime: this.timezoneService.formatDateForDisplay(nowEgypt, 'Egypt')
-     };
-   }
+  /**
+   * الحصول على حالة الكويز الحالية (UPCOMING, ONGOING, ENDED)
+   */
+  getQuizCurrentStatus(quiz: any): 'UPCOMING' | 'ONGOING' | 'ENDED' {
+    const nowUTC = this.timezoneService.getCurrentUTCTime();
 
-   /**
-    * الحصول على كويز مع currentStatus
-    */
-   async getQuizWithStatus(quizId: number, userId: number) {
-     const quiz = await this.prisma.quiz.findFirst({
-       where: {
-         id: quizId,
-         status: 'PUBLIC',
-         group: {
-           memberships: {
-             some: {
-               studentId: userId,
-               status: 'APPROVED'
-             }
-           }
-         }
-       },
-       include: {
-         group: {
-           select: { id: true, name: true, status: true }
-         },
-         subject: true,
-         attempts: {
-           where: {
-             studentId: userId
-           },
-           select: {
-             id: true,
-             score: true,
-             startedAt: true,
-             endedAt: true
-           }
-         }
-       }
-     });
+    if (quiz.startsAt > nowUTC) {
+      return 'UPCOMING';
+    } else if (quiz.endsAt > nowUTC) {
+      return 'ONGOING';
+    } else {
+      return 'ENDED';
+    }
+  }
 
-     if (!quiz) {
-       return {
-         message: "الكويز غير موجود أو غير متاح لك",
-         currentTime: this.timezoneService.formatDateForDisplay(this.timezoneService.getCurrentUTCTime(), 'Egypt')
-       };
-     }
+  /**
+   * إضافة currentStatus لأي كويز
+   */
+  addCurrentStatusToQuiz(quiz: any) {
+    const nowUTC = this.timezoneService.getCurrentUTCTime();
+    const nowEgypt = this.timezoneService.getCurrentEgyptTime();
 
-     return this.addCurrentStatusToQuiz(quiz);
-   }
+    const currentStatus = this.getQuizCurrentStatus(quiz);
 
-   // تم حذف الطرق القديمة واستبدالها بخدمة timezone موحدة
- }
+    // حساب الوقت المتبقي أو الوقت حتى البداية
+    let timeRemaining = 0;
+    let timeUntilStart = 0;
+
+    if (currentStatus === 'ONGOING') {
+      timeRemaining = Math.max(0, Math.floor((quiz.endsAt.getTime() - nowUTC.getTime()) / (1000 * 60)));
+    } else if (currentStatus === 'UPCOMING') {
+      timeUntilStart = Math.max(0, Math.floor((quiz.startsAt.getTime() - nowUTC.getTime()) / (1000 * 60)));
+    }
+
+    return {
+      ...quiz,
+      startsAt: this.timezoneService.convertUTCToEgyptTime(quiz.startsAt),
+      endsAt: this.timezoneService.convertUTCToEgyptTime(quiz.endsAt),
+      currentStatus,
+      timeRemaining,
+      timeUntilStart,
+      currentTime: this.timezoneService.formatDateForDisplay(nowEgypt, 'Egypt')
+    };
+  }
+
+  /**
+   * الحصول على كويز مع currentStatus
+   */
+  async getQuizWithStatus(quizId: number, userId: number) {
+    const quiz = await this.prisma.quiz.findFirst({
+      where: {
+        id: quizId,
+        status: 'PUBLIC',
+        group: {
+          memberships: {
+            some: {
+              studentId: userId,
+              status: 'APPROVED'
+            }
+          }
+        }
+      },
+      include: {
+        group: {
+          select: { id: true, name: true, status: true }
+        },
+        subject: true,
+        attempts: {
+          where: {
+            studentId: userId
+          },
+          select: {
+            id: true,
+            score: true,
+            startedAt: true,
+            endedAt: true
+          }
+        }
+      }
+    });
+
+    if (!quiz) {
+      return {
+        message: "الكويز غير موجود أو غير متاح لك",
+        currentTime: this.timezoneService.formatDateForDisplay(this.timezoneService.getCurrentUTCTime(), 'Egypt')
+      };
+    }
+
+    return this.addCurrentStatusToQuiz(quiz);
+  }
+
+  // تم حذف الطرق القديمة واستبدالها بخدمة timezone موحدة
+}
