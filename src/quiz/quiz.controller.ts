@@ -27,6 +27,41 @@ import { Role } from '../decorator/enums/roles';
 import { GenerateAIQuestionsDto } from './dto/generate-ai-questions.dto';
 import { QuestionAnswerDto } from './dto/question-answer.dto';
 import { StudentFeedbackResponseDto } from './dto/student-feedback-response.dto';
+import {
+    QuizResponseDto,
+    QuizWithQuestionsResponseDto,
+    QuizCreateResponseDto,
+    QuizUpdateResponseDto,
+    QuizDuplicateResponseDto,
+    QuizDeleteResponseDto,
+    QuizStatusUpdateResponseDto
+} from './dto/quiz-response.dto';
+import {
+    QuestionResponseDto,
+    QuestionListResponseDto,
+    QuestionCreateResponseDto,
+    QuestionUpdateResponseDto,
+    QuestionDuplicateResponseDto,
+    QuestionDeleteResponseDto,
+    QuestionRemoveFromQuizResponseDto,
+    AIQuestionsResponseDto
+} from './dto/question-response.dto';
+import {
+    QuizAttemptResponseDto,
+    QuizAttemptWithDetailsResponseDto,
+    QuizAttemptListResponseDto,
+    QuizAttemptStartResponseDto,
+    QuizAttemptCompleteResponseDto,
+    AvailableQuizResponseDto,
+    AvailableQuizListResponseDto
+} from './dto/quiz-attempt-response.dto';
+import {
+    FeedbackRequestResponseDto,
+    TeacherFeedbackResponseDto,
+    TeacherFeedbackListResponseDto,
+    GroupFeedbackResponseDto,
+    QuizCorrectionResponseDto
+} from './dto/feedback-response.dto';
 
 @ApiTags('Quiz')
 @Controller('quiz')
@@ -40,7 +75,13 @@ export class QuizController {
     @Roles(Role.TEACHER)
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get all quizzes for the authenticated teacher' })
-    @ApiResponse({ status: 200, description: 'List of quizzes retrieved successfully' })
+    @ApiResponse({
+        status: 200,
+        description: 'List of quizzes retrieved successfully',
+        type: [QuizResponseDto]
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Teacher role required' })
     /**
      * Retrieves all quizzes for the authenticated teacher
      *
@@ -55,9 +96,15 @@ export class QuizController {
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get a specific quiz by ID' })
     @ApiParam({ name: 'id', description: 'Quiz ID' })
-    @ApiResponse({ status: 200, description: 'Quiz retrieved successfully' })
+    @ApiResponse({
+        status: 200,
+        description: 'Quiz retrieved successfully',
+        type: QuizWithQuestionsResponseDto
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Teacher role required' })
     @ApiResponse({ status: 404, description: 'Quiz not found' })
-
+    @ApiResponse({ status: 400, description: 'Bad request - Invalid quiz ID' })
     /**
      * Retrieves a specific quiz by ID
      *
@@ -73,8 +120,15 @@ export class QuizController {
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Create a new quiz' })
     @ApiBody({ type: CreateQuizDto })
-    @ApiResponse({ status: 201, description: 'Quiz created successfully' })
+    @ApiResponse({
+        status: 201,
+        description: 'Quiz created successfully',
+        type: QuizCreateResponseDto
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Teacher role required' })
     @ApiResponse({ status: 400, description: 'Invalid input data' })
+    @ApiResponse({ status: 404, description: 'Subject or Group not found' })
     /**
      * Creates a new quiz for the authenticated teacher
      *
@@ -91,8 +145,15 @@ export class QuizController {
     @ApiOperation({ summary: 'Update a quiz' })
     @ApiParam({ name: 'id', description: 'Quiz ID' })
     @ApiBody({ type: UpdateQuizDto })
-    @ApiResponse({ status: 200, description: 'Quiz updated successfully' })
+    @ApiResponse({
+        status: 200,
+        description: 'Quiz updated successfully',
+        type: QuizUpdateResponseDto
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Teacher role required' })
     @ApiResponse({ status: 404, description: 'Quiz not found' })
+    @ApiResponse({ status: 400, description: 'Bad request - Invalid input data' })
     /**
      * Updates a quiz for the authenticated teacher
      *
@@ -113,10 +174,15 @@ export class QuizController {
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Duplicate a quiz' })
     @ApiParam({ name: 'id', description: 'Quiz ID to duplicate' })
-    @ApiResponse({ status: 201, description: 'Quiz duplicated successfully' })
+    @ApiResponse({
+        status: 201,
+        description: 'Quiz duplicated successfully',
+        type: QuizDuplicateResponseDto
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Teacher role required' })
     @ApiResponse({ status: 404, description: 'Quiz not found' })
-
-
+    @ApiResponse({ status: 500, description: 'Internal server error' })
     /**
      * Duplicates a quiz for the authenticated teacher
      *
@@ -133,7 +199,13 @@ export class QuizController {
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Delete a quiz' })
     @ApiParam({ name: 'id', description: 'Quiz ID to delete' })
-    @ApiResponse({ status: 204, description: 'Quiz deleted successfully' })
+    @ApiResponse({
+        status: 200,
+        description: 'Quiz deleted successfully',
+        type: QuizDeleteResponseDto
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Teacher role required' })
     @ApiResponse({ status: 400, description: 'Only draft quizzes can be deleted' })
     @ApiResponse({ status: 404, description: 'Quiz not found' })
     /**
@@ -151,7 +223,13 @@ export class QuizController {
     @Roles(Role.TEACHER)
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get all questions for the authenticated teacher' })
-    @ApiResponse({ status: 200, description: 'List of questions retrieved successfully' })
+    @ApiResponse({
+        status: 200,
+        description: 'List of questions retrieved successfully',
+        type: [QuestionResponseDto]
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Teacher role required' })
     /**
      * Retrieves all questions for the authenticated teacher
      *
@@ -166,8 +244,15 @@ export class QuizController {
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get a specific question by ID' })
     @ApiParam({ name: 'id', description: 'Question ID' })
-    @ApiResponse({ status: 200, description: 'Question retrieved successfully' })
+    @ApiResponse({
+        status: 200,
+        description: 'Question retrieved successfully',
+        type: QuestionResponseDto
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Teacher role required' })
     @ApiResponse({ status: 404, description: 'Question not found' })
+    @ApiResponse({ status: 400, description: 'Bad request - Invalid question ID' })
     /**
      * Retrieves a specific question by ID for the authenticated teacher
      *
@@ -187,8 +272,15 @@ export class QuizController {
         type: [CreateQuestionDto],
         description: 'Array of questions to add to the quiz'
     })
-    @ApiResponse({ status: 201, description: 'Questions added to quiz successfully' })
+    @ApiResponse({
+        status: 201,
+        description: 'Questions added to quiz successfully',
+        type: QuestionCreateResponseDto
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Teacher role required' })
     @ApiResponse({ status: 400, description: 'Invalid input data' })
+    @ApiResponse({ status: 404, description: 'Quiz not found' })
     /**
      * Adds a manual question to a quiz for the authenticated teacher
      *
@@ -213,8 +305,15 @@ export class QuizController {
     @ApiOperation({ summary: 'Add an existing question to a quiz' })
     @ApiParam({ name: 'quizId', description: 'Quiz ID' })
     @ApiParam({ name: 'questionId', description: 'Question ID to add' })
-    @ApiResponse({ status: 200, description: 'Question added to quiz successfully' })
+    @ApiResponse({
+        status: 200,
+        description: 'Question added to quiz successfully',
+        type: QuestionResponseDto
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Teacher role required' })
     @ApiResponse({ status: 404, description: 'Quiz or question not found' })
+    @ApiResponse({ status: 400, description: 'Bad request - Invalid IDs' })
     /**
      * Adds an existing question to a quiz for the authenticated teacher
      *
@@ -222,7 +321,6 @@ export class QuizController {
      * @param questionId The ID of the question to add
      * @returns The created question
      */
-
     async addOldQuestionToQuiz(
         @Param('quizId', ParseIntPipe) quizId: number,
         @Param('questionId', ParseIntPipe) questionId: number,
@@ -237,14 +335,21 @@ export class QuizController {
     @ApiOperation({ summary: 'Add AI-generated questions to a quiz' })
     @ApiParam({ name: 'quizId', description: 'Quiz ID' })
     @ApiBody({ type: GenerateAIQuestionsDto, description: 'AI question generation parameters' })
-    @ApiResponse({ status: 201, description: 'AI questions added to quiz successfully' })
+    @ApiResponse({
+        status: 201,
+        description: 'AI questions added to quiz successfully',
+        type: AIQuestionsResponseDto
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Teacher role required' })
     @ApiResponse({ status: 400, description: 'Invalid input data' })
     @ApiResponse({ status: 404, description: 'Quiz not found' })
+    @ApiResponse({ status: 500, description: 'AI service error' })
     /**
      * Adds AI-generated questions to a quiz for the authenticated teacher
      *
      * @param quizId The ID of the quiz to add the questions to
-     * @param noOfQuestions The number of AI questions to add
+     * @param generateAIQuestionsDto The AI question generation parameters
      * @returns The created questions
      */
     async addAiQuestionsToQuiz(
@@ -260,8 +365,15 @@ export class QuizController {
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Duplicate a question' })
     @ApiParam({ name: 'id', description: 'Question ID to duplicate' })
-    @ApiResponse({ status: 201, description: 'Question duplicated successfully' })
+    @ApiResponse({
+        status: 201,
+        description: 'Question duplicated successfully',
+        type: QuestionDuplicateResponseDto
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Teacher role required' })
     @ApiResponse({ status: 404, description: 'Question not found' })
+    @ApiResponse({ status: 500, description: 'Internal server error' })
     /**
      * Duplicates a question for the authenticated teacher
      *
@@ -278,8 +390,15 @@ export class QuizController {
     @ApiOperation({ summary: 'Update a question' })
     @ApiParam({ name: 'id', description: 'Question ID' })
     @ApiBody({ type: UpdateQuestionDto })
-    @ApiResponse({ status: 200, description: 'Question updated successfully' })
+    @ApiResponse({
+        status: 200,
+        description: 'Question updated successfully',
+        type: QuestionUpdateResponseDto
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Teacher role required' })
     @ApiResponse({ status: 404, description: 'Question not found' })
+    @ApiResponse({ status: 400, description: 'Bad request - Invalid input data' })
     /**
      * Updates a question for the authenticated teacher
      *
@@ -299,9 +418,17 @@ export class QuizController {
     @Roles(Role.TEACHER)
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Remove a question from its quiz' })
-    @ApiParam({ name: 'id', description: 'Question ID' })
-    @ApiResponse({ status: 200, description: 'Question removed from quiz successfully' })
-    @ApiResponse({ status: 404, description: 'Question not found' })
+    @ApiParam({ name: 'questionId', description: 'Question ID' })
+    @ApiParam({ name: 'quizId', description: 'Quiz ID' })
+    @ApiResponse({
+        status: 200,
+        description: 'Question removed from quiz successfully',
+        type: QuestionRemoveFromQuizResponseDto
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Teacher role required' })
+    @ApiResponse({ status: 404, description: 'Question or quiz not found' })
+    @ApiResponse({ status: 400, description: 'Bad request - Invalid IDs' })
     /**
      * Removes a question from its associated quiz for the authenticated teacher
      *
@@ -322,8 +449,15 @@ export class QuizController {
     @HttpCode(HttpStatus.NO_CONTENT)
     @ApiOperation({ summary: 'Delete a question' })
     @ApiParam({ name: 'id', description: 'Question ID' })
-    @ApiResponse({ status: 204, description: 'Question deleted successfully' })
+    @ApiResponse({
+        status: 204,
+        description: 'Question deleted successfully',
+        type: QuestionDeleteResponseDto
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Teacher role required' })
     @ApiResponse({ status: 404, description: 'Question not found' })
+    @ApiResponse({ status: 400, description: 'Question is linked to quizzes' })
     /**
      * Deletes a question for the authenticated teacher
      *
@@ -340,7 +474,14 @@ export class QuizController {
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get my quiz attempts' })
     @ApiParam({ name: 'id', description: 'Quiz ID' })
-    @ApiResponse({ status: 200, description: 'Quiz attempts retrieved successfully' })
+    @ApiResponse({
+        status: 200,
+        description: 'Quiz attempts retrieved successfully',
+        type: [QuizAttemptResponseDto]
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Student role required' })
+    @ApiResponse({ status: 400, description: 'Bad request - Invalid quiz ID' })
     /**
      * Retrieves all quiz attempts for the authenticated student for a quiz
      *
@@ -356,7 +497,15 @@ export class QuizController {
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get all quiz attempts for a quiz' })
     @ApiParam({ name: 'id', description: 'Quiz ID' })
-    @ApiResponse({ status: 200, description: 'Quiz attempts retrieved successfully' })
+    @ApiResponse({
+        status: 200,
+        description: 'Quiz attempts retrieved successfully',
+        type: QuizAttemptListResponseDto
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Teacher role required' })
+    @ApiResponse({ status: 404, description: 'Quiz not found' })
+    @ApiResponse({ status: 400, description: 'Bad request - Invalid quiz ID' })
     /**
      * Retrieves all quiz attempts for a quiz for the authenticated teacher
      *
@@ -372,8 +521,15 @@ export class QuizController {
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Start a quiz attempt' })
     @ApiParam({ name: 'id', description: 'Quiz ID' })
-    @ApiResponse({ status: 201, description: 'Quiz attempt started successfully' })
+    @ApiResponse({
+        status: 201,
+        description: 'Quiz attempt started successfully',
+        type: QuizAttemptStartResponseDto
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Student role required' })
     @ApiResponse({ status: 400, description: 'Quiz not available for attempt' })
+    @ApiResponse({ status: 404, description: 'Quiz not found' })
     /**
      * Starts a quiz attempt for the authenticated student
      *
@@ -389,8 +545,15 @@ export class QuizController {
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get questions for a quiz attempt' })
     @ApiParam({ name: 'quizAttemptId', description: 'Quiz Attempt ID' })
-    @ApiResponse({ status: 200, description: 'Questions retrieved successfully' })
+    @ApiResponse({
+        status: 200,
+        description: 'Questions retrieved successfully',
+        type: [QuestionResponseDto]
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Student role required' })
     @ApiResponse({ status: 404, description: 'Quiz attempt not found' })
+    @ApiResponse({ status: 400, description: 'Bad request - Invalid attempt ID' })
     /**
      * Retrieves questions for a quiz attempt for the authenticated student
      *
@@ -408,9 +571,15 @@ export class QuizController {
     @ApiOperation({ summary: 'Add an answer to a quiz attempt' })
     @ApiParam({ name: 'quizAttemptId', description: 'Quiz Attempt ID' })
     @ApiBody({ type: [QuestionAnswerDto] })
-    @ApiResponse({ status: 201, description: 'Answer added successfully' })
+    @ApiResponse({
+        status: 201,
+        description: 'Answer added successfully',
+        type: [QuestionAnswerDto]
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Student role required' })
     @ApiResponse({ status: 400, description: 'Invalid input data' })
-
+    @ApiResponse({ status: 404, description: 'Quiz attempt not found' })
     /**
      * Adds answers to a quiz attempt for the authenticated student
      *
@@ -430,9 +599,15 @@ export class QuizController {
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Complete a quiz attempt' })
     @ApiParam({ name: 'quizAttemptId', description: 'Quiz Attempt ID' })
-    @ApiResponse({ status: 200, description: 'Quiz attempt completed successfully' })
+    @ApiResponse({
+        status: 200,
+        description: 'Quiz attempt completed successfully',
+        type: QuizAttemptCompleteResponseDto
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Student role required' })
     @ApiResponse({ status: 404, description: 'Quiz attempt not found' })
-
+    @ApiResponse({ status: 500, description: 'Internal server error' })
     /**
      * Completes a quiz attempt for the authenticated student
      *
@@ -448,8 +623,15 @@ export class QuizController {
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get quiz attempt details' })
     @ApiParam({ name: 'quizAttemptId', description: 'Quiz Attempt ID' })
-    @ApiResponse({ status: 200, description: 'Quiz attempt retrieved successfully' })
+    @ApiResponse({
+        status: 200,
+        description: 'Quiz attempt retrieved successfully',
+        type: QuizAttemptWithDetailsResponseDto
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Student role required' })
     @ApiResponse({ status: 404, description: 'Quiz attempt not found' })
+    @ApiResponse({ status: 400, description: 'Bad request - Invalid attempt ID' })
     /**
      * Retrieves a quiz attempt by ID for the authenticated student
      *
@@ -464,7 +646,13 @@ export class QuizController {
     @Roles(Role.STUDENT)
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get available quizzes for student' })
-    @ApiResponse({ status: 200, description: 'Available quizzes retrieved successfully' })
+    @ApiResponse({
+        status: 200,
+        description: 'Available quizzes retrieved successfully',
+        type: [AvailableQuizResponseDto]
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Student role required' })
     /**
      * Retrieves all quizzes that the authenticated student is eligible to attempt
      *
@@ -486,8 +674,16 @@ export class QuizController {
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Request AI feedback for quiz attempts' })
     @ApiParam({ name: 'id', description: 'Quiz ID' })
-    @ApiResponse({ status: 200, description: 'Feedback generated successfully' })
+    @ApiResponse({
+        status: 200,
+        description: 'Feedback generated successfully',
+        type: FeedbackRequestResponseDto
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Teacher role required' })
     @ApiResponse({ status: 404, description: 'Quiz not found' })
+    @ApiResponse({ status: 400, description: 'Bad request - Invalid quiz ID' })
+    @ApiResponse({ status: 500, description: 'AI service error' })
     /**
      * Requests AI feedback for a quiz for the authenticated teacher
      *
@@ -530,6 +726,16 @@ export class QuizController {
     // }
 
     @Get(':groupId/request-feedback')
+    @ApiOperation({ summary: 'Get group feedback for a specific group' })
+    @ApiParam({ name: 'groupId', description: 'Group ID' })
+    @ApiResponse({
+        status: 200,
+        description: 'Group feedback retrieved successfully',
+        type: GroupFeedbackResponseDto
+    })
+    @ApiResponse({ status: 400, description: 'Bad request - Invalid group ID' })
+    @ApiResponse({ status: 404, description: 'Group not found' })
+    @ApiResponse({ status: 500, description: 'AI service error' })
     async getGroupFeedback(
         @Param('groupId') groupId: number,
         @Query('feedback_language') feedback_language: string = 'en',
@@ -548,7 +754,10 @@ export class QuizController {
         description: 'Student feedback retrieved successfully',
         type: StudentFeedbackResponseDto
     })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Student role required' })
     @ApiResponse({ status: 404, description: 'Quiz attempt not found or no feedback available' })
+    @ApiResponse({ status: 400, description: 'Bad request - Invalid attempt ID' })
     /**
      * Retrieves detailed feedback for a specific quiz attempt for the authenticated student
      *
@@ -568,6 +777,8 @@ export class QuizController {
         description: 'All student feedback retrieved successfully',
         type: [StudentFeedbackResponseDto]
     })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Student role required' })
     /**
      * Retrieves all feedback for the authenticated student across all quizzes
      *
@@ -580,33 +791,17 @@ export class QuizController {
     @Get('feedback/teacher/:studentId')
     @Roles(Role.TEACHER)
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
+    @ApiOperation({ summary: 'Get teacher feedback requests for a student' })
+    @ApiParam({ name: 'studentId', description: 'Student ID' })
     @ApiResponse({
         status: 200,
         description: 'Teacher feedback requests for a student retrieved successfully',
-        schema: {
-            type: 'object',
-            properties: {
-                id: { type: 'number' },
-                studentId: { type: 'number' },
-                teacherId: { type: 'number' },
-                progress: { type: 'string' },
-                summaryFeedback: { type: 'string' },
-                strongPoints: { type: 'array', items: { type: 'string' } },
-                weakPoints: { type: 'array', items: { type: 'string' } },
-                improvedPoints: { type: 'array', items: { type: 'string' } },
-                declinedPoints: { type: 'array', items: { type: 'string' } },
-                unchangedPoints: { type: 'array', items: { type: 'string' } },
-                scoreTrend: { type: 'array', items: { type: 'number' } },
-                riskLevel: { type: 'string' },
-                teachingRecommendation: { type: 'string' },
-                createdAt: { type: 'string', format: 'date-time' },
-                userId: { type: 'number', nullable: true },
-            },
-        },
+        type: [TeacherFeedbackResponseDto]
     })
-    @UseGuards(AuthenticationGuard, AuthorizationGuard)
-    @ApiOperation({ summary: 'Get teacher feedback requests for a student' })
-    @ApiParam({ name: 'studentId', description: 'Student ID' })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Teacher role required' })
+    @ApiResponse({ status: 404, description: 'Student not found' })
+    @ApiResponse({ status: 400, description: 'Bad request - Invalid student ID' })
     /**
      * Retrieves all teacher feedback requests for a student for the authenticated teacher
      *
@@ -625,14 +820,13 @@ export class QuizController {
     @ApiResponse({
         status: 200,
         description: 'Teacher feedback generated successfully',
-        schema: {
-            type: 'object',
-            properties: {
-                message: { type: 'string', example: 'Feedback stored successfully' }
-            }
-        }
+        type: TeacherFeedbackResponseDto
     })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Teacher role required' })
     @ApiResponse({ status: 400, description: 'Invalid input data' })
+    @ApiResponse({ status: 404, description: 'Student not found' })
+    @ApiResponse({ status: 500, description: 'AI service error' })
     /**
      * Requests AI teacher feedback for a student's performance for the authenticated teacher
      *
@@ -653,9 +847,23 @@ export class QuizController {
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Update quiz status' })
     @ApiParam({ name: 'id', description: 'Quiz ID' })
-    // @ApiBody({ type:  UpdateQuizDto  })
-    @ApiResponse({ status: 200, description: 'Quiz status updated successfully' })
+    @ApiBody({
+        schema: {
+            type: 'object',
+            properties: {
+                status: { type: 'string', enum: ['DRAFT', 'PUBLIC'] }
+            }
+        }
+    })
+    @ApiResponse({
+        status: 200,
+        description: 'Quiz status updated successfully',
+        type: QuizStatusUpdateResponseDto
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Teacher role required' })
     @ApiResponse({ status: 404, description: 'Quiz not found' })
+    @ApiResponse({ status: 400, description: 'Bad request - Invalid status' })
     async updateQuizStatus(@Param('id', ParseIntPipe) id: number, @Body() updateQuizDto: { status: 'DRAFT' | 'PUBLIC' }, @Request() req) {
         return await this.quizService.updateQuizStatus(id, +req.user.id, updateQuizDto.status);
     }
@@ -664,6 +872,17 @@ export class QuizController {
     @Get(':quizId/correct')
     @Roles(Role.TEACHER)
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
+    @ApiOperation({ summary: 'Correct a quiz using AI' })
+    @ApiParam({ name: 'quizId', description: 'Quiz ID' })
+    @ApiResponse({
+        status: 200,
+        description: 'Quiz corrected successfully',
+        type: QuizCorrectionResponseDto
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Teacher role required' })
+    @ApiResponse({ status: 404, description: 'Quiz attempt not found' })
+    @ApiResponse({ status: 500, description: 'AI service error' })
     async correctQuiz(
         @Req() req: any,
         @Param('quizId', ParseIntPipe) quizId: number,
