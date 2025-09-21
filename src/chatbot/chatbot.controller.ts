@@ -80,6 +80,6 @@ export class ChatbotController {
     @ApiResponse({ status: 404, description: 'Chatbot session not found' })
     @ApiResponse({ status: 400, description: 'Failed to send message' })
     async sendMessage(@Req() req, @Param('sessionId') sessionId: number, @Body() message: { text: string }) {
-        return await this.ChatbotService.sendMessage(req.user.id, message.text, sessionId);
+        return await this.ChatbotService.sendMessage(+req.user.id, message.text, sessionId);
     }
 }

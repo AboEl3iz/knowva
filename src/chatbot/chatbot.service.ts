@@ -14,7 +14,6 @@ export class ChatbotService {
     }
 
     async createChatbotSession(userId: number, groupId: number) {
-        Logger.debug(`Creating chatbot session for user ${userId} in group ${groupId}`);
         const membership = await this.prisma.membership.findFirst({ where: { studentId: userId, groupId } });
         if (!membership) {
             throw new BadRequestException('User is not a member of the group');
@@ -25,23 +24,27 @@ export class ChatbotService {
     }
 
     async sendMessage(userId: number, message: string, sessionId: number) {
-        const session = await this.prisma.chatbotSession.findUnique({ where: { id: sessionId, studentId: userId }, include: { messages: true } });
+        const session = await this.prisma.chatbotSession.findUnique({
+            where: { id: sessionId, studentId: userId },
+            include: { messages: true , group: true }
+        })
         if (!session) {
             throw new BadRequestException('Session not found');
         }
-
-        message = message.trim();
+        Logger.debug(`Sending message to chatbot: ${message} for session ${sessionId} and group ${session.groupId}`);
+        // message = message.trim();
 
         let response;
         try {
             response = await axios.post('https://8080-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/chatbot/ask', {
-                group_id: session.groupId,
+                group_id: session.groupId.toString(),
                 user_query: message,
-                student_id: userId,
-                session_id: sessionId
+                student_id: userId.toString(),
+                session_id: sessionId.toString()
             });
+            Logger.debug(`Chatbot response: ${JSON.stringify(response.data)}`);
         } catch (e) {
-            throw new BadRequestException('Failed to send message');
+            throw new BadRequestException(`Failed to send message to chatbot: ${e.message}` );
         }
 
         const answer = response.data.response.answer;
