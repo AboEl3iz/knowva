@@ -4,6 +4,9 @@ export class ChatbotResponseDto {
     @ApiProperty({ description: 'Chatbot session ID', example: 1 })
     id: number;
 
+    @ApiProperty({ description: 'Chatbot session title', example: 'title 1' })
+    title: string
+
     @ApiProperty({ description: 'Group ID', example: 1 })
     groupId: number;
 
