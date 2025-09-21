@@ -19,7 +19,8 @@ export class ChatbotService {
             throw new BadRequestException('User is not a member of the group');
         }
 
-        return await this.prisma.chatbotSession.create({ data: { studentId: userId, groupId } });
+        let session = await this.prisma.chatbotSession.create({ data: { studentId: userId, groupId } });
+        return session;
     }
 
     async sendMessage(userId: number, message: string, sessionId: number) {
