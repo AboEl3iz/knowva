@@ -4,6 +4,7 @@ import { AuthorizationGuard } from "src/guards/authorization.guard";
 import { AuthenticationGuard } from "src/guards/authentication.guard";
 import { Roles } from "src/decorator/decorator/roles.decorator";
 import { Role } from "src/decorator/enums/roles";
+import { ApiBody, ApiOperation, ApiParam, ApiResponse } from "@nestjs/swagger";
 
 @Controller('chatbot')
 export class ChatbotController {
@@ -12,6 +13,10 @@ export class ChatbotController {
     @Get()
     @Roles(Role.STUDENT)
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
+    @ApiOperation({ summary: 'Get all chatbots' })
+    @ApiResponse({ status: 200, description: 'Get all chatbots' })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden' })
     async getChatbots(@Req() req) {
         return this.ChatbotService.getChatbots(req.user.id);
     }
@@ -19,6 +24,12 @@ export class ChatbotController {
     @Get('/:sessionId')
     @Roles(Role.STUDENT)
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
+    @ApiOperation({ summary: 'Get chatbot' })
+    @ApiParam({ name: 'sessionId', type: 'number', required: true, description: 'Chatbot session id' })
+    @ApiResponse({ status: 200, description: 'Get chatbot' })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden' })
+    @ApiResponse({ status: 404, description: 'Chatbot not found' })
     async getChatbot(@Req() req, @Param('sessionId') sessionId: number) {
         return this.ChatbotService.getChatbot(sessionId, req.user.id);
     }
@@ -26,6 +37,12 @@ export class ChatbotController {
     @Post('/:groupId')
     @Roles(Role.STUDENT)
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
+    @ApiOperation({ summary: 'Create chatbot session' })
+    @ApiParam({ name: 'groupId', type: 'number', required: true, description: 'Group id' })
+    @ApiResponse({ status: 200, description: 'Create chatbot session' })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden' })
+    @ApiResponse({ status: 404, description: 'Group not found' })
     async createChatbotSession(@Req() req, @Param('groupId') groupId: number) {
         return this.ChatbotService.createChatbotSession(req.user.id, groupId);
     }
@@ -33,6 +50,14 @@ export class ChatbotController {
     @Post('/:sessionId')
     @Roles(Role.STUDENT)
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
+    @ApiOperation({ summary: 'Send message' })
+    @ApiParam({ name: 'sessionId', type: 'number', required: true, description: 'Chatbot session id' })
+    @ApiBody({ description: 'Message', type: String, required: true })
+    @ApiResponse({ status: 200, description: 'Send message' })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden' })
+    @ApiResponse({ status: 404, description: 'Chatbot session not found' })
+    @ApiResponse({ status: 400, description: 'Failed to send message' })
     async sendMessage(@Req() req, @Param('sessionId') sessionId: number, @Body() message: string) {
         return this.ChatbotService.sendMessage(req.user.id, message, sessionId);
     }
