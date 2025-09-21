@@ -27,7 +27,7 @@ export class ChatbotController {
     @ApiResponse({ status: 401, description: 'Unauthorized' })
     @ApiResponse({ status: 403, description: 'Forbidden' })
     async getChatbots(@Req() req) {
-        return this.ChatbotService.getChatbots(req.user.id);
+        return await this.ChatbotService.getChatbots(req.user.id);
     }
 
     @Get('/:sessionId')
@@ -44,7 +44,7 @@ export class ChatbotController {
     @ApiResponse({ status: 403, description: 'Forbidden' })
     @ApiResponse({ status: 404, description: 'Chatbot not found' })
     async getChatbot(@Req() req, @Param('sessionId') sessionId: number) {
-        return this.ChatbotService.getChatbot(sessionId, req.user.id);
+        return await this.ChatbotService.getChatbot(sessionId, req.user.id);
     }
 
     @Post('/:groupId')
@@ -61,7 +61,7 @@ export class ChatbotController {
     @ApiResponse({ status: 403, description: 'Forbidden' })
     @ApiResponse({ status: 404, description: 'Group not found' })
     async createChatbotSession(@Req() req, @Param('groupId') groupId: number) {
-        return this.ChatbotService.createChatbotSession(req.user.id, groupId);
+        return await this.ChatbotService.createChatbotSession(req.user.id, groupId);
     }
 
     @Post('/:sessionId')
@@ -80,6 +80,6 @@ export class ChatbotController {
     @ApiResponse({ status: 404, description: 'Chatbot session not found' })
     @ApiResponse({ status: 400, description: 'Failed to send message' })
     async sendMessage(@Req() req, @Param('sessionId') sessionId: number, @Body() message: string) {
-        return this.ChatbotService.sendMessage(req.user.id, message, sessionId);
+        return await this.ChatbotService.sendMessage(req.user.id, message, sessionId);
     }
 }

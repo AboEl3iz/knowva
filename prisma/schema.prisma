@@ -425,6 +425,7 @@ model Notification {
 
 model ChatbotSession {
   id        Int      @id @default(autoincrement())
+  title     String?
   group     Group    @relation(fields: [groupId], references: [id])
   groupId   Int
   student   User     @relation(fields: [studentId], references: [id])

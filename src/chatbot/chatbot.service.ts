@@ -23,7 +23,7 @@ export class ChatbotService {
     }
 
     async sendMessage(userId: number, message: string, sessionId: number) {
-        const session = await this.prisma.chatbotSession.findUnique({ where: { id: sessionId, studentId: userId } });
+        const session = await this.prisma.chatbotSession.findUnique({ where: { id: sessionId, studentId: userId }, include: { messages: true } });
         if (!session) {
             throw new BadRequestException('Session not found');
         }
@@ -45,6 +45,10 @@ export class ChatbotService {
         const answer = response.data.response.answer;
 
         await this.prisma.chatbotMessage.createMany({ data: [{ sessionId: sessionId, text: message, aiGenerated: false }, { sessionId: sessionId, text: answer, aiGenerated: true }] });
+
+        if (session.messages.length < 1) {
+            await this.prisma.chatbotSession.update({ where: { id: session.id }, data: { title: message } });
+        }
 
         return { answer };
     }
