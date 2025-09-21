@@ -4,13 +4,13 @@ import { AuthorizationGuard } from "src/guards/authorization.guard";
 import { AuthenticationGuard } from "src/guards/authentication.guard";
 import { Roles } from "src/decorator/decorator/roles.decorator";
 import { Role } from "src/decorator/enums/roles";
-import { ApiBody, ApiOperation, ApiParam, ApiResponse } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiResponse } from "@nestjs/swagger";
 import {
     ChatbotResponseDto,
     ChatbotWithMessagesResponseDto,
     SendMessageResponseDto
 } from "./dto/responses.dto";
-
+@ApiBearerAuth()
 @Controller('chatbot')
 export class ChatbotController {
     constructor(private ChatbotService: ChatbotService) { }

@@ -13,7 +13,7 @@ import { Logger, UseGuards } from '@nestjs/common';
 import { WsJwtGuard } from 'src/guards/ws.guard';
 import { JwtService } from '@nestjs/jwt';
 
-@WebSocketGateway(3001, {
+@WebSocketGateway({ namespace: 'chat'  ,
   cors: {
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
