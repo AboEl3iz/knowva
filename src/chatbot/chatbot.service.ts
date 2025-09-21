@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from "@nestjs/common";
+import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import axios from "axios";
 import { group } from "console";
 import { PrismaService } from "src/database/prisma.service";
@@ -19,7 +19,48 @@ export class ChatbotService {
         if (!membership) {
             throw new BadRequestException('User is not a member of the group');
         }
-        
+
+        /**
+         * 1. check if the group has a lesson 
+         * 2. if not, throw an error
+         * 3. if yes, create a new chatbot session && upload this lesson for ai model
+         * 4. return the session
+         */
+        // const lessons = await this.prisma.lesson.findMany({
+        //     where: {
+        //         groups: {
+        //             some: {
+        //                 id: groupId,
+        //                 group: {
+        //                     memberships: { some: { studentId: userId, status: 'APPROVED' } }
+        //                 }
+        //             }
+        //         }
+        //     }
+        // });
+
+        // if (!lessons.length) {
+        //     throw new NotFoundException('Group has no lessons');
+        // }
+
+        // for (const lesson of lessons) {
+        //     const aiPayload = {
+        //         group_id: groupId.toString(),
+        //         pdf_path: lesson.url
+        //     };
+
+        //     try {
+        //         Logger.debug(`Uploading lesson to AI model: ${JSON.stringify(aiPayload)}`);
+        //         const response = await axios.post(
+        //             'https://8080-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/embedding/upload-document',
+        //             aiPayload,
+        //             { headers: { 'Content-Type': 'application/json' } }
+        //         );
+        //         Logger.debug(`AI model upload response: ${JSON.stringify(response.data)}`);
+        //     } catch (e) {
+        //         throw new BadRequestException(`Failed to upload lesson to AI model: ${e.message}`);
+        //     }
+        // }
 
         let session = await this.prisma.chatbotSession.create({ data: { studentId: userId, groupId } });
         return session;
@@ -34,14 +75,7 @@ export class ChatbotService {
             throw new BadRequestException('Session not found');
         }
         Logger.debug(`Sending message to chatbot: ${message} for session ${sessionId} and group ${session.groupId}`);
-        // message = message.trim();
-        // let requestPayload = {
-        //     group_id: session.groupId.toString(),
-        //     user_query: message,
-        //     student_id: userId.toString(),
-        //     session_id: sessionId.toString()
 
-        // }
         let requestPayload = {
             group_id: session.groupId.toString(),
             user_query: message,

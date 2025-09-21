@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { CreateLessonDto } from './dto/create-lesson.dto';
 import { UpdateLessonDto } from './dto/update-lesson.dto';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
@@ -10,6 +10,7 @@ import { IMaterial } from 'src/helper/interfaces/interfaces.response';
 import { matrialType } from 'src/decorator/enums/roles';
 import { NotificationService } from 'src/notification/notification.service';
 import { NotificationGateway } from 'src/notification/notification.gateway';
+import axios from 'axios';
 
 @Injectable()
 export class LessonService {
@@ -90,6 +91,25 @@ export class LessonService {
         groupId: groupId
       }))
     });
+    for (let groupId of groupIds) {
+      const aiPayload = {
+        group_id: groupId.toString(),
+        pdf_path: result.secure_url  // اللينك بتاع الملف من Cloudinary
+      };
+
+      try {
+        Logger.debug(`Uploading lesson to AI model: ${JSON.stringify(aiPayload)}`);
+        const response = await axios.post(
+          'https://8080-01k4nxc27xwgyn4vsge9kda40b.cloudspaces.litng.ai/ai/embedding/upload-document',
+          aiPayload,
+          { headers: { 'Content-Type': 'application/json' } }
+        );
+        Logger.debug(`AI model upload response: ${JSON.stringify(response.data)}`);
+      } catch (e) {
+        Logger.error(`Failed to upload lesson to AI model: ${e.message}`);
+        // ممكن تعمل retry later أو تخزن في جدول pending_uploads
+      }
+    }
 
     // Return lesson with groups
     let lessonWithGroups = await this.prisma.lesson.findUnique({
@@ -119,13 +139,13 @@ export class LessonService {
           message,
           NotificationType.LESSON_ADDED
         )
-        this.notificationGateway.sendNotification(membership.studentId.toString(), 
+        this.notificationGateway.sendNotification(membership.studentId.toString(),
           message
-          
+
         );
       }
-    } 
-    
+    }
+
 
     return lessonWithGroups!;
   }
