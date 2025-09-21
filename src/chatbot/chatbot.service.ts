@@ -43,9 +43,9 @@ export class ChatbotService {
 
         // }
         let requestPayload = {
-            group_id: session.group.id.toString(),
+            group_id: session.groupId.toString(),
             user_query: message,
-            student_id: "1",
+            student_id: userId.toString(),
             session_id: session.id.toString()
         };
 
