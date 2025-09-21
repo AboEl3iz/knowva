@@ -1,9 +1,9 @@
-import { BadRequestException } from "@nestjs/common";
+import { BadRequestException, Injectable, Logger } from "@nestjs/common";
 import axios from "axios";
 import { PrismaService } from "src/database/prisma.service";
-
+@Injectable()
 export class ChatbotService {
-    constructor(private prisma: PrismaService) { }
+    constructor(private readonly prisma: PrismaService) { }
 
     async getChatbots(userId: number) {
         return await this.prisma.chatbotSession.findMany({ where: { studentId: userId } });
@@ -14,7 +14,8 @@ export class ChatbotService {
     }
 
     async createChatbotSession(userId: number, groupId: number) {
-        const membership = await this.prisma.membership.findFirst({ where: { groupId, studentId: userId } });
+        Logger.debug(`Creating chatbot session for user ${userId} in group ${groupId}`);
+        const membership = await this.prisma.membership.findFirst({ where: { studentId: userId, groupId } });
         if (!membership) {
             throw new BadRequestException('User is not a member of the group');
         }
