@@ -4,16 +4,21 @@ import { UpdateLessonDto } from './dto/update-lesson.dto';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import { UploadApiResponse } from 'cloudinary';
 import { PrismaService } from 'src/database/prisma.service';
-import { Lesson, LessonType } from '@prisma/client';
+import { Lesson, LessonType, NotificationType } from '@prisma/client';
 import { unlink } from 'fs';
 import { IMaterial } from 'src/helper/interfaces/interfaces.response';
 import { matrialType } from 'src/decorator/enums/roles';
+import { NotificationService } from 'src/notification/notification.service';
+import { NotificationGateway } from 'src/notification/notification.gateway';
 
 @Injectable()
 export class LessonService {
   constructor(
     private readonly cloudinaryService: CloudinaryService,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    private readonly notificationService: NotificationService,
+    private readonly notificationGateway: NotificationGateway,
+
   ) { }
 
   async create(file: Express.Multer.File, CreateLessonDto: CreateLessonDto, subjectId: number, groupIds: number[], userId: number): Promise<Lesson> {
@@ -97,6 +102,30 @@ export class LessonService {
         }
       }
     });
+    //send notifications to the students of the groups
+    for (let groupId of groupIds) {
+      let memberships = await this.prisma.membership.findMany({
+        where: {
+          groupId: groupId
+        },
+        include: {
+          student: true
+        }
+      });
+      for (let membership of memberships) {
+        let message = `New lesson "${lesson.title}" added to your group "${groups.find(g => g.id === groupId)?.name}"`;
+        await this.notificationService.create(
+          membership.studentId,
+          message,
+          NotificationType.LESSON_ADDED
+        )
+        this.notificationGateway.sendNotification(membership.studentId.toString(), 
+          message
+          
+        );
+      }
+    } 
+    
 
     return lessonWithGroups!;
   }
