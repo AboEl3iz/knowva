@@ -5,6 +5,11 @@ import { AuthenticationGuard } from "src/guards/authentication.guard";
 import { Roles } from "src/decorator/decorator/roles.decorator";
 import { Role } from "src/decorator/enums/roles";
 import { ApiBody, ApiOperation, ApiParam, ApiResponse } from "@nestjs/swagger";
+import {
+    ChatbotResponseDto,
+    ChatbotWithMessagesResponseDto,
+    SendMessageResponseDto
+} from "./dto/responses.dto";
 
 @Controller('chatbot')
 export class ChatbotController {
@@ -14,7 +19,11 @@ export class ChatbotController {
     @Roles(Role.STUDENT)
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get all chatbots' })
-    @ApiResponse({ status: 200, description: 'Get all chatbots' })
+    @ApiResponse({
+        status: 200,
+        description: 'Get all chatbots',
+        type: [ChatbotResponseDto]
+    })
     @ApiResponse({ status: 401, description: 'Unauthorized' })
     @ApiResponse({ status: 403, description: 'Forbidden' })
     async getChatbots(@Req() req) {
@@ -26,7 +35,11 @@ export class ChatbotController {
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Get chatbot' })
     @ApiParam({ name: 'sessionId', type: 'number', required: true, description: 'Chatbot session id' })
-    @ApiResponse({ status: 200, description: 'Get chatbot' })
+    @ApiResponse({
+        status: 200,
+        description: 'Get chatbot',
+        type: ChatbotWithMessagesResponseDto
+    })
     @ApiResponse({ status: 401, description: 'Unauthorized' })
     @ApiResponse({ status: 403, description: 'Forbidden' })
     @ApiResponse({ status: 404, description: 'Chatbot not found' })
@@ -39,7 +52,11 @@ export class ChatbotController {
     @UseGuards(AuthenticationGuard, AuthorizationGuard)
     @ApiOperation({ summary: 'Create chatbot session' })
     @ApiParam({ name: 'groupId', type: 'number', required: true, description: 'Group id' })
-    @ApiResponse({ status: 200, description: 'Create chatbot session' })
+    @ApiResponse({
+        status: 200,
+        description: 'Create chatbot session',
+        type: ChatbotResponseDto
+    })
     @ApiResponse({ status: 401, description: 'Unauthorized' })
     @ApiResponse({ status: 403, description: 'Forbidden' })
     @ApiResponse({ status: 404, description: 'Group not found' })
@@ -53,7 +70,11 @@ export class ChatbotController {
     @ApiOperation({ summary: 'Send message' })
     @ApiParam({ name: 'sessionId', type: 'number', required: true, description: 'Chatbot session id' })
     @ApiBody({ description: 'Message', type: String, required: true })
-    @ApiResponse({ status: 200, description: 'Send message' })
+    @ApiResponse({
+        status: 200,
+        description: 'Send message',
+        type: SendMessageResponseDto
+    })
     @ApiResponse({ status: 401, description: 'Unauthorized' })
     @ApiResponse({ status: 403, description: 'Forbidden' })
     @ApiResponse({ status: 404, description: 'Chatbot session not found' })

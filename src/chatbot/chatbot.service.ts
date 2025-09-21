@@ -46,6 +46,6 @@ export class ChatbotService {
 
         await this.prisma.chatbotMessage.createMany({ data: [{ sessionId: sessionId, text: message, aiGenerated: false }, { sessionId: sessionId, text: answer, aiGenerated: true }] });
 
-        return answer;
+        return { answer };
     }
 }
