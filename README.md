@@ -13,7 +13,7 @@ It manages users, groups, lessons, quizzes, notifications, and integrates with a
 ### 🔐 Authentication & Authorization
 
 * **JWT-based authentication**
-* **Role-based access control**: `Student`, `Teacher`, `Admin`
+* **Role-based access control**: `Student`, `Teacher`
 * Guards & decorators to restrict access
 
 ---
