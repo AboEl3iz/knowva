@@ -182,6 +182,32 @@ It manages users, groups, lessons, quizzes, notifications, and integrates with a
 
 ---
 
+## 🧠 Feedback & Insights
+
+This backend generates and persists actionable feedback for students and classes, leveraging AI and structured analytics.
+
+* __Per-Student Attempt Feedback__
+  - Teachers can trigger feedback generation for a quiz: `POST /quiz/:id/request-feedback` (see `QuizController.requestFeedbackStudent()` → `QuizService.requestFeedbackStudent()`).
+  - The service aggregates the student attempts, calls the AI when needed, and persists an `AttemptFeedback` record with per-question `QuestionFeedback`.
+  - Data shapes are documented in `src/quiz/dto/student-feedback-response.dto.ts`:
+    - `AttemptFeedbackResponseDto`: `summary`, `weakPoints[]`, `goodPoints[]`, and `QuestionFeedback[]`.
+    - `QuestionFeedbackResponseDto`: textual feedback tied to the student's `QuestionAnswer`.
+    - `StudentFeedbackResponseDto`: wraps the attempt, quiz info, answers, and feedback.
+
+* __Question-Level Insights__
+  - Each `QuestionAnswer` receives AI remarks (when applicable) and a final normalized score.
+  - Written answers are scored via `/ai/correct_quiz/` and stored back to `QuestionAnswer.score`.
+
+* __Class/Group Insights__
+  - The `AnalysisService` computes attendance %, averages, hardest questions (based on failure rates), and score distributions.
+  - Designed to surface where the class struggles and who might need help.
+
+Notes:
+  - Feedback persistence models: `AttemptFeedback`, `QuestionFeedback`, and links to `QuizAttempt` and `QuestionAnswer` (see `prisma/schema.prisma`).
+  - When publishing a quiz or adding lessons, notifications inform students; feedback flows can be triggered post-exam.
+
+---
+
 ## ⚙️ Setup & Development
 
 1) __Prerequisites__
