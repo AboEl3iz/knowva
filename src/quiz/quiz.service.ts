@@ -566,7 +566,7 @@ export class QuizService {
                 });
 
             } else if (q.type === "Written") {
-                writtenPayload.max_grade += q.score ?? 0;
+                writtenPayload.max_grade = q.score ?? 0;
                 writtenPayload.questions.push({
                     question_id: q.id.toString(),
                     student_id: attempt.studentId.toString(),
@@ -1514,6 +1514,23 @@ export class QuizService {
 
         // Calculate aggregated data
         const allWrongQuestions = studentFeedbacks.flatMap((s: any) => s.most_wrong_questions || []);
+        const allWrongQuestionsTexts = studentFeedbacks.flatMap((s: any) => s.most_wrong_questions || []);
+
+        // Count occurrences of each wrong question
+        const wrongQuestionCounts = allWrongQuestionsTexts.reduce((acc, questionText) => {
+            acc[questionText] = (acc[questionText] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
+
+        // Sort questions by how frequently they were answered incorrectly
+        const sortedWrongQuestions = Object.entries(wrongQuestionCounts)
+            .sort(([, countA]: [string, number], [, countB]: [string, number]) => countB - countA)
+            .map(([questionText]) => questionText);
+
+        // Determine how many questions to return (top 15% or minimum of 3)
+        const numberOfQuestionsToTake = Math.max(3, Math.ceil(sortedWrongQuestions.length * 0.15));
+        const topWrongQuestions = sortedWrongQuestions.slice(0, numberOfQuestionsToTake);
+
         const allPrevScores = studentFeedbacks.flatMap((s: any) => s.avg_score_prev || []);
         const allPrevSuccessRates = studentFeedbacks.flatMap((s: any) => s.success_rate_prev || []);
 
@@ -1528,7 +1545,8 @@ export class QuizService {
         );
 
         const payload: GroupFeedbackRequestDto = {
-            most_wrong_questions: allWrongQuestions.length > 0 ? allWrongQuestions : ["No specific wrong questions identified"],
+            // most_wrong_questions: allWrongQuestions.length > 0 ? allWrongQuestions : ["No specific wrong questions identified"],
+            most_wrong_questions: topWrongQuestions.length > 0 ? topWrongQuestions : ["No specific wrong questions identified"],
             avg_score_this_quiz: avgScoreThisQuiz,
             avg_score_prev: allPrevScores.length > 0 ? allPrevScores.map(score => Number(score)) : [0],
             success_rate_this_quiz: avgSuccessRateThisQuiz,
@@ -1542,7 +1560,7 @@ export class QuizService {
         };
 
         // 3️⃣ استدعاء AI API
-        console.log('Sending payload to AI API:', JSON.stringify(payload, null, 2));
+        Logger.log('Sending payload to AI API:', JSON.stringify(payload, null, 2));
         console.log('Payload validation:', {
             hasWrongQuestions: payload.most_wrong_questions.length > 0,
             hasPrevScores: payload.avg_score_prev.length > 0,
@@ -1576,13 +1594,7 @@ export class QuizService {
             );
         } catch (error: any) {
             console.error('AI API Error Details:', {
-                status: error?.response?.status,
-                statusText: error?.response?.statusText,
-                data: error?.response?.data,
-                message: error?.message,
-                code: error?.code,
-                url: error?.config?.url,
-                payload: error?.config?.data
+                 payload: error?.config?.data
             });
 
             // Provide more specific error messages based on the status code

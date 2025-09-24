@@ -805,7 +805,7 @@ export class QuizController {
     @ApiResponse({ status: 404, description: 'Group not found' })
     @ApiResponse({ status: 500, description: 'AI service error' })
     async getGroupFeedback(
-        @Param('groupId') groupId: number,
+        @Param('groupId', ParseIntPipe) groupId: number,
         @Query('feedback_language') feedback_language: string = 'en',
     ) {
         return this.quizService.requestGroupFeedback(groupId, feedback_language);
